@@ -1,0 +1,244 @@
+{
+  "schemaVersion": 1,
+  "runtimeApiVersion": 2,
+  "id": "sf32-unified",
+  "moduleVersion": "0.5.0-dev",
+  "displayName": "SF32 Unified Bridge",
+  "boardFamily": "SiFli SF32LB52",
+  "description": "SF32LB52 上统一接收 DualSense 与 Nintendo NS2Pro。",
+  "priority": 100,
+  "capabilities": "DeviceStatus, LiveInput, UsbRoleSelection, InputSourceSelection, WirelessControllers, Rumble, UsbAudio, Motion, Settings, SelfTest, RawCommands, FirmwareFlashing",
+  "matchAny": [
+    { "profileKeys": ["dualsense"], "serialNumbers": ["DualSense HID"] },
+    { "profileKeys": ["ns2pro-nintendo"], "serialNumbers": ["HA2F83JI"] },
+    { "platformContains": ["SF32LB52"] }
+  ],
+  "hidDevices": [
+    {
+      "key": "dualsense", "displayName": "DualSense Manager",
+      "vendorId": 1356, "productId": 3302,
+      "managerUsagePage": 1, "managerUsageId": 5,
+      "managerFeatureReportId": 246, "usbRole": "DualSense",
+      "managerSerialNumber": "DualSense HID",
+      "legacyManagerProductName": "DualSense HID",
+      "tags": ["sf32lb52", "ds5", "dualsense"],
+      "supportsInputReports": true
+    },
+    {
+      "key": "ns2pro-nintendo", "displayName": "SF32LB52 NS2Pro HID Manager",
+      "vendorId": 1406, "productId": 8297,
+      "managerUsagePage": 65280, "managerUsageId": 1,
+      "managerFeatureReportId": 127, "commandOutputReportId": 2,
+      "usbRole": "NintendoNs2Pro", "managerSerialNumber": "HA2F83JI",
+      "tags": ["sf32lb52", "ns2pro"], "supportsInputReports": true
+    }
+  ],
+  "boards": [
+    {
+      "id": "sf32lb52-devkit-nano",
+      "displayName": "SF32LB52-DevKit-Nano",
+      "family": "SF32LB52",
+      "description": "当前实测开发板，USB 设备口配合板载下载串口。"
+    }
+  ],
+  "firmware": [
+    {
+      "id": "sf32-unified-current",
+      "displayName": "SF32 Unified Bridge",
+      "version": "0.5.0-dev",
+      "description": "DS5 Classic、NS2Pro BLE、震动与 USB Audio。",
+      "boardIds": ["sf32lb52-devkit-nano"],
+      "flashMethod": "SifliSerial",
+      "artifactRelativePath": "artifacts/sftool_param.json",
+      "flashHint": "使用板载下载串口和 sftool 烧录；完成后重新插拔 USB 设备口。"
+    }
+  ],
+  "usbRoles": [
+    { "role": "DualSense", "displayName": "DualSense", "description": "音频、震动与触觉", "command": "role set ds5" },
+    { "role": "NintendoNs2Pro", "displayName": "Nintendo NS2Pro", "description": "原生 Nintendo 身份", "command": "role set ns2pro" }
+  ],
+  "inputSources": [
+    { "preference": "Auto", "displayName": "自动选择", "description": "优先使用已连接控制器", "command": "input set auto" },
+    { "preference": "DualSense", "displayName": "仅使用 DualSense", "description": "Bluetooth Classic HID", "command": "input set ds5" },
+    { "preference": "NintendoNs2Pro", "displayName": "仅使用 NS2Pro", "description": "Bluetooth LE GATT", "command": "input set ns2pro" }
+  ],
+  "wirelessControllers": [
+    {
+      "id": "ds5",
+      "displayName": "DualSense / DS5",
+      "transportLabel": "Bluetooth Classic",
+      "pairCommand": "pair ds5",
+      "connectCommand": "connect ds5",
+      "disconnectCommand": "disconnect ds5",
+      "forgetCommand": "forget ds5"
+    },
+    {
+      "id": "ns2",
+      "displayName": "Nintendo NS2Pro",
+      "transportLabel": "Bluetooth LE",
+      "pairCommand": "pair ns2",
+      "connectCommand": "connect ns2",
+      "disconnectCommand": "disconnect ns2",
+      "forgetCommand": "forget ns2"
+    }
+  ],
+  "statusCommands": ["bridge status", "usb status", "settings", "rumble"],
+  "selfTestCommands": ["bridge status", "usb status", "settings", "rumble", "bridge input", "motion status", "ns2 status"],
+  "primaryStatusCommand": "bridge status",
+  "inputStatusCommand": "bridge input",
+  "saveSettingsCommand": "settings save",
+  "settingsCommandTemplates": [
+    "rumble tune {rumbleScalePercent} {rumbleHoldMs} {rumbleTickMs} {rumbleStopPackets}",
+    "usb rate {reportRateHz}",
+    "usb raw {usbRaw}",
+    "web parse {liveParsing}"
+  ],
+  "rumbleCommandTemplate": "rumble test {target}",
+  "operations": {
+    "settings.read": {
+      "transport": "ManagerCommand",
+      "request": "settings"
+    },
+    "settings.rate.apply": {
+      "transport": "ManagerCommand",
+      "request": "usb rate {value}"
+    },
+    "settings.raw.apply": {
+      "transport": "ManagerCommand",
+      "request": "usb raw {value}"
+    },
+    "settings.parse.apply": {
+      "transport": "ManagerCommand",
+      "request": "web parse {value}"
+    },
+    "settings.save": {
+      "transport": "ManagerCommand",
+      "request": "settings save"
+    },
+    "mapping.read": {
+      "transport": "ManagerCommand",
+      "request": "mapping get {profile}"
+    },
+    "mapping.set": {
+      "transport": "ManagerCommand",
+      "request": "mapping set {profile} {target} {source}"
+    },
+    "mapping.reset": {
+      "transport": "ManagerCommand",
+      "request": "mapping reset {profile}"
+    },
+    "mapping.save": {
+      "transport": "ManagerCommand",
+      "request": "mapping save {profile}"
+    }
+  },
+  "pages": [
+    {
+      "id": "module-settings",
+      "label": "模块设置",
+      "description": "由 SF32 固件模块提供的设备设置",
+      "icon": "Settings",
+      "sections": [
+        {
+          "id": "usb",
+          "label": "USB 与诊断",
+          "description": "修改后可以直接应用，保存操作会写入设备持久存储。",
+          "controls": [
+            {
+              "id": "report-rate",
+              "type": "Number",
+              "label": "USB 回报率",
+              "binding": "/report_rate_hz",
+              "default": 250,
+              "min": 60,
+              "max": 1000,
+              "step": 10,
+              "unit": "Hz",
+              "readAction": "settings.read",
+              "applyAction": "settings.rate.apply"
+            },
+            {
+              "id": "raw-usb",
+              "type": "Toggle",
+              "label": "Raw USB 诊断",
+              "description": "仅在排查原始报告时开启。",
+              "binding": "/usb_raw_passthrough",
+              "default": false,
+              "readAction": "settings.read",
+              "applyAction": "settings.raw.apply"
+            },
+            {
+              "id": "live-parsing",
+              "type": "Toggle",
+              "label": "实时解析",
+              "binding": "/web_parse_reports",
+              "default": true,
+              "readAction": "settings.read",
+              "applyAction": "settings.parse.apply"
+            },
+            {
+              "id": "save-settings",
+              "type": "ActionButton",
+              "label": "保存到设备",
+              "applyAction": "settings.save"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ps-mapping",
+      "label": "PS / DS5 映射",
+      "description": "输入手柄：DualSense / DualSense Edge",
+      "icon": "Keyboard",
+      "sections": [
+        {
+          "id": "ps-layout",
+          "label": "目标按键 ← 来源按键",
+          "controls": [
+            {
+              "id": "ps-button-map",
+              "type": "MappingEditor",
+              "label": "PS / DualSense 按键来源",
+              "mappingProfile": "ds5",
+              "binding": "/entries",
+              "sourceCatalog": "controller.inputControls",
+              "targetCatalog": "bridge.outputControls",
+              "readAction": "mapping.read",
+              "applyAction": "mapping.set",
+              "resetAction": "mapping.reset",
+              "saveAction": "mapping.save"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ns-mapping",
+      "label": "NS2Pro 映射",
+      "description": "输入手柄：Nintendo NS2Pro",
+      "icon": "GameController",
+      "sections": [
+        {
+          "id": "ns-layout",
+          "label": "目标按键 ← 来源按键",
+          "controls": [
+            {
+              "id": "ns-button-map",
+              "type": "MappingEditor",
+              "label": "NS2Pro 按键来源",
+              "mappingProfile": "ns2pro",
+              "binding": "/entries",
+              "sourceCatalog": "controller.inputControls",
+              "targetCatalog": "bridge.outputControls",
+              "readAction": "mapping.read",
+              "applyAction": "mapping.set",
+              "resetAction": "mapping.reset",
+              "saveAction": "mapping.save"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

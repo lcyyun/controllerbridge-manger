@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "runtimeApiVersion": 1,
+  "id": "esp32s3-ns2-bridge",
+  "moduleVersion": "0.1.0-dev",
+  "displayName": "ESP32-S3 NS2Pro Bridge",
+  "boardFamily": "Espressif ESP32-S3",
+  "description": "只接收 Nintendo NS2Pro，并通过原生 USB 输出 Nintendo HID。",
+  "priority": 95,
+  "capabilities": "DeviceStatus, LiveInput, WirelessControllers, Rumble, Motion, Settings, SelfTest, RawCommands",
+  "matchAny": [
+    { "profileKeys": ["ns2pro-nintendo"], "serialNumbers": ["NS2BRIDGE-S3-N-MGR2"] }
+  ],
+  "hidDevices": [
+    {
+      "key": "esp32s3-ns2", "displayName": "ESP32-S3 NS2Pro HID Manager",
+      "vendorId": 1406, "productId": 8297,
+      "managerUsagePage": 65280, "managerUsageId": 1,
+      "managerFeatureReportId": 127, "commandOutputReportId": 2,
+      "usbRole": "NintendoNs2Pro", "managerSerialNumber": "NS2BRIDGE-S3-N-MGR2",
+      "supportsInputReports": true,
+      "tags": ["esp32s3", "ns2pro"]
+    }
+  ],
+  "boards": [
+    {
+      "id": "esp32s3-n16r8",
+      "displayName": "ESP32-S3 N16R8",
+      "family": "ESP32-S3",
+      "description": "具备原生 USB Device 的 ESP32-S3 开发板。"
+    }
+  ],
+  "firmware": [
+    {
+      "id": "esp32s3-ns2-current",
+      "displayName": "ESP32-S3 NS2Pro Bridge",
+      "version": "0.1.0-dev",
+      "description": "NS2Pro BLE、Nintendo HID、输入、IMU 与 HD Rumble。",
+      "boardIds": ["esp32s3-n16r8"],
+      "flashMethod": "None",
+      "artifactRelativePath": null,
+      "flashHint": "使用 ESP-IDF/esptool 烧录；正式镜像必须使用唯一 USB 序列号 NS2BRIDGE-S3-N-MGR2。"
+    }
+  ],
+  "usbRoles": [
+    { "role": "NintendoNs2Pro", "displayName": "Nintendo NS2Pro", "description": "原生 Nintendo 身份", "command": "role set ns2pro" }
+  ],
+  "inputSources": [
+    { "preference": "NintendoNs2Pro", "displayName": "仅使用 NS2Pro", "description": "Bluetooth LE GATT", "command": "input set ns2pro" }
+  ],
+  "wirelessControllers": [
+    {
+      "id": "ns2",
+      "displayName": "Nintendo NS2Pro",
+      "transportLabel": "Bluetooth LE",
+      "pairCommand": "ns2 pair",
+      "connectCommand": "ns2 reconnect",
+      "disconnectCommand": "ns2 disconnect",
+      "forgetCommand": "ns2 forget"
+    }
+  ],
+  "statusCommands": ["status", "usb status", "settings", "motion status"],
+  "selfTestCommands": ["status", "usb status", "settings", "motion status", "rumble"],
+  "primaryStatusCommand": "status",
+  "inputStatusCommand": "input status",
+  "saveSettingsCommand": "settings save",
+  "settingsCommandTemplates": [
+    "rumble tune {rumbleScalePercent} {rumbleHoldMs} {rumbleTickMs} {rumbleStopPackets}",
+    "usb rate {reportRateHz}",
+    "usb raw {usbRaw}",
+    "web parse {liveParsing}"
+  ],
+  "rumbleCommandTemplate": "rumble test {target}"
+}

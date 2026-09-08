@@ -1,0 +1,506 @@
+<Window
+    x:Class="BridgeManager.Modern.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Controller Bridge">
+    <Grid Background="{ThemeResource BridgePageBrush}">
+        <Grid.Resources>
+            <Style TargetType="TextBlock" BasedOn="{StaticResource BridgeBodyTextStyle}" />
+            <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="Transparent" />
+            <Thickness x:Key="ExpanderHeaderBorderThickness">0,1,0,0</Thickness>
+            <Thickness x:Key="ExpanderContentDownBorderThickness">0</Thickness>
+            <Thickness x:Key="ExpanderContentUpBorderThickness">0</Thickness>
+            <Thickness x:Key="ExpanderHeaderPadding">0,14,0,14</Thickness>
+        </Grid.Resources>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <NavigationView
+            x:Name="MainNavigation"
+            Grid.Row="0"
+            IsBackButtonVisible="Collapsed"
+            IsSettingsVisible="False"
+            IsPaneToggleButtonVisible="True"
+            PaneDisplayMode="Auto"
+            OpenPaneLength="220"
+            CompactPaneLength="54"
+            ExpandedModeThresholdWidth="1100"
+            CompactModeThresholdWidth="720"
+            Background="{ThemeResource BridgePaneBrush}"
+            FontFamily="{StaticResource BridgeUIFontFamily}"
+            Foreground="{ThemeResource BridgeTextBrush}"
+            ItemInvoked="NavigationView_ItemInvoked"
+            SelectionChanged="NavigationView_SelectionChanged">
+            <NavigationView.Resources>
+                <SolidColorBrush x:Key="NavigationViewContentBackground" Color="Transparent" />
+                <CornerRadius x:Key="NavigationViewContentGridCornerRadius">0</CornerRadius>
+            </NavigationView.Resources>
+            <NavigationView.PaneHeader>
+                <Grid Margin="14,12,12,24" ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="24" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <FontIcon Glyph="&#xE7FC;" FontSize="22" Foreground="{ThemeResource BridgeAccentInkBrush}" VerticalAlignment="Top" Margin="0,4,0,0" />
+                    <StackPanel Grid.Column="1" Spacing="3">
+                        <TextBlock Text="Controller Bridge" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" />
+                        <TextBlock x:Name="ModulePaneText" Text="通用管理器" Style="{StaticResource QuietCaptionStyle}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Grid>
+            </NavigationView.PaneHeader>
+            <NavigationView.MenuItems>
+                <NavigationViewItem x:Name="HomeNavItem" Content="概览" Tag="home" IsSelected="True">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE80F;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Name="InputNavItem" Content="输入测试" Tag="input">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE7FC;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Name="FeedbackNavItem" Content="震动与音频" Tag="feedback">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE8D6;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItemSeparator />
+                <NavigationViewItem x:Name="AdvancedNavItem" Content="高级诊断" Tag="advanced">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE713;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+            <NavigationView.FooterMenuItems>
+                <NavigationViewItem x:Name="WizardNavItem" Content="固件与设置" Tag="wizard" SelectsOnInvoked="False" ToolTipService.ToolTip="固件与设置向导">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE896;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.FooterMenuItems>
+
+            <Grid Padding="24,20,12,0" Background="{ThemeResource BridgePageBrush}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Border Margin="0,0,12,0" Padding="0,0,0,20" BorderBrush="{ThemeResource BridgeStrokeBrush}" BorderThickness="0,0,0,1">
+                    <Grid ColumnSpacing="20">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <StackPanel Spacing="4">
+                            <TextBlock x:Name="PageTitleText" Text="概览" Style="{StaticResource BridgePageTitleStyle}" />
+                            <TextBlock x:Name="PageSubtitleText" Text="设备、角色与无线连接" Style="{StaticResource QuietCaptionStyle}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                            <Border x:Name="ConnectionBadge" MaxWidth="180" Padding="10,6" Margin="0,0,8,0" CornerRadius="4" Background="{ThemeResource BridgeInsetBrush}">
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="8" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <Ellipse x:Name="ConnectionDot" Width="7" Height="7" Fill="{ThemeResource TextFillColorDisabledBrush}" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="ConnectionBadgeText" Grid.Column="1" Text="正在查找设备" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                </Grid>
+                            </Border>
+                            <Button Style="{StaticResource IconButtonStyle}" Click="RefreshDevices_Click" ToolTipService.ToolTip="扫描设备" AutomationProperties.Name="扫描设备">
+                                <FontIcon Glyph="&#xE72C;" FontSize="16" />
+                            </Button>
+                            <Button Style="{StaticResource IconButtonStyle}" Click="Connect_Click" ToolTipService.ToolTip="连接所选设备" AutomationProperties.Name="连接所选设备">
+                                <FontIcon Glyph="&#xE71B;" FontSize="16" />
+                            </Button>
+                            <Button Style="{StaticResource IconButtonStyle}" Click="Disconnect_Click" ToolTipService.ToolTip="断开管理连接" AutomationProperties.Name="断开管理连接">
+                                <SymbolIcon Symbol="DisconnectDrive" />
+                            </Button>
+                            <Border Width="1" Height="20" Background="{ThemeResource BridgeStrokeBrush}" Margin="8,0" />
+                            <Button x:Name="ThemeToggleButton" Style="{StaticResource IconButtonStyle}" Click="ThemeToggle_Click" ToolTipService.ToolTip="切换明暗主题" AutomationProperties.Name="切换明暗主题">
+                                <FontIcon Glyph="&#xE706;" FontSize="17" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Grid Grid.Row="1" Margin="0,24,0,0">
+                    <ScrollViewer x:Name="HomePage" Visibility="Collapsed" Style="{StaticResource BridgePageScrollStyle}">
+                        <StackPanel MaxWidth="1180" HorizontalAlignment="Stretch" Spacing="24">
+                            <Grid ColumnSpacing="24">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="管理连接" Style="{StaticResource QuietCaptionStyle}" />
+                                    <TextBlock x:Name="ConnectionText" Text="正在扫描" FontSize="24" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="TransportText" Text="正在查找 USB HID" TextWrapping="Wrap" />
+                                    <TextBlock x:Name="ActiveModuleText" Text="模块：自动识别" Style="{StaticResource QuietCaptionStyle}" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Click="TestAll_Click" VerticalAlignment="Center" Padding="14,9">
+                                    <StackPanel Orientation="Horizontal" Spacing="8"><SymbolIcon Symbol="Repair" /><TextBlock Text="运行自检" /></StackPanel>
+                                </Button>
+                            </Grid>
+
+                            <Border Padding="0,20" BorderBrush="{ThemeResource BridgeStrokeBrush}" BorderThickness="0,1,0,1">
+                                <Grid ColumnSpacing="24">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="7">
+                                        <TextBlock Text="USB 身份" Style="{StaticResource QuietCaptionStyle}" />
+                                        <TextBlock x:Name="RoleText" Text="-" Style="{StaticResource BridgeMetricStyle}" />
+                                    </StackPanel>
+                                    <Border Grid.Column="1" BorderBrush="{ThemeResource BridgeStrokeBrush}" BorderThickness="1,0,0,0" Padding="24,0,0,0">
+                                        <StackPanel Spacing="7">
+                                            <TextBlock Text="活动输入" Style="{StaticResource QuietCaptionStyle}" />
+                                            <TextBlock x:Name="InputText" Text="-" Style="{StaticResource BridgeMetricStyle}" />
+                                            <TextBlock x:Name="InputPreferenceText" Text="偏好：-" Style="{StaticResource QuietCaptionStyle}" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="2" BorderBrush="{ThemeResource BridgeStrokeBrush}" BorderThickness="1,0,0,0" Padding="24,0,0,0">
+                                        <StackPanel Spacing="7">
+                                            <TextBlock Text="USB 状态" Style="{StaticResource QuietCaptionStyle}" />
+                                            <TextBlock x:Name="UsbText" Text="-" Style="{StaticResource BridgeMetricStyle}" />
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </Border>
+
+                            <StackPanel x:Name="RoleAndWirelessSection" Spacing="16">
+                                <StackPanel x:Name="UsbRoleSection" Spacing="4">
+                                    <TextBlock Text="USB 输出身份" Style="{StaticResource SectionTitleStyle}" />
+                                </StackPanel>
+                                <ItemsControl x:Name="RoleOptionsList" HorizontalContentAlignment="Stretch">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><ItemsWrapGrid Orientation="Horizontal" ItemWidth="300" ItemHeight="100" /></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Tag="{Binding Option}" Click="RoleOption_Click" Style="{StaticResource RoleButtonStyle}" Margin="0,0,12,12" BorderBrush="{Binding BorderBrush}" Background="{Binding Background}" BorderThickness="{Binding BorderThickness}" AutomationProperties.Name="{Binding Option.DisplayName}">
+                                                <Grid ColumnSpacing="12">
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                                    <FontIcon Glyph="&#xE7FC;" FontSize="22" Foreground="{Binding AccentBrush}" />
+                                                    <StackPanel Grid.Column="1" Spacing="4">
+                                                        <TextBlock Text="{Binding Option.DisplayName}" FontWeight="SemiBold" />
+                                                        <TextBlock Text="{Binding Option.Description}" Style="{StaticResource QuietCaptionStyle}" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <StackPanel x:Name="WirelessSection" Spacing="14">
+                                    <TextBlock Text="无线手柄" Style="{StaticResource SectionTitleStyle}" />
+                                    <ItemsControl x:Name="WirelessControllerList">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><ItemsWrapGrid Orientation="Horizontal" ItemWidth="320" ItemHeight="184" /></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Margin="0,0,12,12" Padding="16" CornerRadius="6" BorderThickness="1" BorderBrush="{ThemeResource BridgeStrokeBrush}" Background="{ThemeResource BridgeSurfaceBrush}">
+                                                    <Grid RowSpacing="12">
+                                                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                                        <Grid ColumnSpacing="12">
+                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                                            <FontIcon Glyph="&#xE7FC;" FontSize="22" Foreground="{Binding AccentBrush}" VerticalAlignment="Top" Margin="0,3,0,0" />
+                                                            <StackPanel Grid.Column="1" Spacing="3">
+                                                                <TextBlock Text="{Binding Option.DisplayName}" FontWeight="SemiBold" />
+                                                                <TextBlock Text="{Binding Option.TransportLabel}" Style="{StaticResource QuietCaptionStyle}" />
+                                                            </StackPanel>
+                                                        </Grid>
+                                                        <TextBlock Grid.Row="1" Text="{Binding StatusText}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                                        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="6">
+                                                            <Button Tag="{Binding PairAction}" IsEnabled="{Binding CanPair}" Click="WirelessCommand_Click" Padding="10,6">
+                                                                <StackPanel Orientation="Horizontal" Spacing="6"><FontIcon Glyph="&#xE710;" FontSize="13" /><TextBlock Text="配对" /></StackPanel>
+                                                            </Button>
+                                                            <Button Tag="{Binding ConnectAction}" IsEnabled="{Binding CanConnect}" Click="WirelessCommand_Click" Padding="10,6">
+                                                                <StackPanel Orientation="Horizontal" Spacing="6"><FontIcon Glyph="&#xE71B;" FontSize="13" /><TextBlock Text="连接" /></StackPanel>
+                                                            </Button>
+                                                            <Button Tag="{Binding DisconnectAction}" IsEnabled="{Binding CanDisconnect}" Click="WirelessCommand_Click" Style="{StaticResource IconButtonStyle}" ToolTipService.ToolTip="断开手柄" AutomationProperties.Name="断开手柄"><SymbolIcon Symbol="DisconnectDrive" /></Button>
+                                                            <Button Tag="{Binding ForgetAction}" IsEnabled="{Binding CanForget}" Click="WirelessCommand_Click" Style="{StaticResource IconButtonStyle}" ToolTipService.ToolTip="遗忘手柄" AutomationProperties.Name="遗忘手柄"><FontIcon Glyph="&#xE74D;" FontSize="16" /></Button>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel x:Name="InputSelectionSection" Spacing="14">
+                                <TextBlock Text="接收器输入偏好" Style="{StaticResource SectionTitleStyle}" />
+                                <ItemsControl x:Name="InputOptionsList">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><ItemsWrapGrid Orientation="Horizontal" ItemWidth="300" ItemHeight="96" /></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Tag="{Binding Option}" Click="InputOption_Click" Style="{StaticResource RoleButtonStyle}" Margin="0,0,12,12" BorderBrush="{Binding BorderBrush}" Background="{Binding Background}" BorderThickness="{Binding BorderThickness}" AutomationProperties.Name="{Binding Option.DisplayName}">
+                                                <Grid ColumnSpacing="12">
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="16" /></Grid.ColumnDefinitions>
+                                                    <StackPanel Spacing="4">
+                                                        <TextBlock Text="{Binding Option.DisplayName}" FontWeight="SemiBold" />
+                                                        <TextBlock Text="{Binding Option.Description}" Style="{StaticResource QuietCaptionStyle}" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                    <FontIcon Grid.Column="1" Glyph="&#xE76C;" FontSize="12" Foreground="{ThemeResource BridgeSecondaryTextBrush}" />
+                                                </Grid>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                            <Button x:Name="SaveSettingsButton" HorizontalAlignment="Left" Click="SaveSettings_Click" Padding="14,9">
+                                <StackPanel Orientation="Horizontal" Spacing="8"><SymbolIcon Symbol="Save" /><TextBlock Text="保存当前设置" /></StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <ScrollViewer x:Name="InputPage" Visibility="Collapsed" Style="{StaticResource BridgePageScrollStyle}">
+                        <StackPanel MaxWidth="1180" HorizontalAlignment="Stretch" Spacing="20">
+                            <Grid RowSpacing="8" ColumnSpacing="8">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                <ComboBox x:Name="InputSourceBox" Header="输入源" PlaceholderText="选择输入源" DisplayMemberPath="DisplayName" SelectionChanged="InputSourceBox_SelectionChanged" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.Name="输入源" />
+                                <Button Grid.Column="1" VerticalAlignment="Bottom" Style="{StaticResource IconButtonStyle}" Click="RefreshInputSources_Click" ToolTipService.ToolTip="刷新手柄" AutomationProperties.Name="刷新手柄">
+                                    <FontIcon Glyph="&#xE72C;" FontSize="16" />
+                                </Button>
+                                <TextBlock x:Name="InputSourceDetailText" Grid.Row="1" Grid.ColumnSpan="2" Text="尚未选择输入源" Style="{StaticResource QuietCaptionStyle}" TextWrapping="Wrap" />
+                            </Grid>
+
+                            <Border Padding="0,0,0,16" BorderBrush="{ThemeResource BridgeStrokeBrush}" BorderThickness="0,0,0,1">
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4" VerticalAlignment="Center">
+                                        <TextBlock x:Name="InputHealthText" Text="等待手柄输入" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                        <TextBlock x:Name="InputRateText" Text="接收速率：-" Style="{StaticResource QuietCaptionStyle}" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="BatteryText" Grid.Column="1" Text="电量：未知" Style="{StaticResource QuietCaptionStyle}" VerticalAlignment="Center" />
+                                    <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" Click="RefreshInput_Click" ToolTipService.ToolTip="刷新输入状态" AutomationProperties.Name="刷新输入状态">
+                                        <FontIcon Glyph="&#xE72C;" FontSize="16" />
+                                    </Button>
+                                </Grid>
+                            </Border>
+
+                            <Grid ColumnSpacing="32">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="1.4*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                <StackPanel Spacing="24">
+                                    <!-- The input provider owns the artwork and its neutral disconnected state. -->
+                                    <Grid x:Name="InputControllerArtworkHost" Height="280" MaxWidth="680" HorizontalAlignment="Stretch" />
+                                    <Grid ColumnSpacing="20">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                        <StackPanel Spacing="10">
+                                            <TextBlock Text="左摇杆" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                                            <Canvas Width="180" Height="180" HorizontalAlignment="Center" AutomationProperties.Name="左摇杆位置">
+                                                <Ellipse Width="180" Height="180" Fill="{ThemeResource BridgeInsetBrush}" Stroke="{ThemeResource BridgeStrokeBrush}" StrokeThickness="1" />
+                                                <Ellipse Width="90" Height="90" Stroke="{ThemeResource BridgeStrokeBrush}" StrokeThickness="1" Canvas.Left="45" Canvas.Top="45" />
+                                                <Rectangle Width="1" Height="160" Fill="{ThemeResource BridgeStrokeBrush}" Canvas.Left="89.5" Canvas.Top="10" />
+                                                <Rectangle Width="160" Height="1" Fill="{ThemeResource BridgeStrokeBrush}" Canvas.Left="10" Canvas.Top="89.5" />
+                                                <Ellipse x:Name="LeftStickDot" Width="20" Height="20" Fill="{ThemeResource SonyBrush}" Canvas.Left="80" Canvas.Top="80" />
+                                            </Canvas>
+                                            <TextBlock x:Name="LeftStickText" Text="X 0 / Y 0" Style="{StaticResource BridgeMonoTextStyle}" HorizontalAlignment="Center" TextAlignment="Center" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="10">
+                                            <TextBlock Text="右摇杆" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                                            <Canvas Width="180" Height="180" HorizontalAlignment="Center" AutomationProperties.Name="右摇杆位置">
+                                                <Ellipse Width="180" Height="180" Fill="{ThemeResource BridgeInsetBrush}" Stroke="{ThemeResource BridgeStrokeBrush}" StrokeThickness="1" />
+                                                <Ellipse Width="90" Height="90" Stroke="{ThemeResource BridgeStrokeBrush}" StrokeThickness="1" Canvas.Left="45" Canvas.Top="45" />
+                                                <Rectangle Width="1" Height="160" Fill="{ThemeResource BridgeStrokeBrush}" Canvas.Left="89.5" Canvas.Top="10" />
+                                                <Rectangle Width="160" Height="1" Fill="{ThemeResource BridgeStrokeBrush}" Canvas.Left="10" Canvas.Top="89.5" />
+                                                <Ellipse x:Name="RightStickDot" Width="20" Height="20" Fill="{ThemeResource NintendoBrush}" Canvas.Left="80" Canvas.Top="80" />
+                                            </Canvas>
+                                            <TextBlock x:Name="RightStickText" Text="X 0 / Y 0" Style="{StaticResource BridgeMonoTextStyle}" HorizontalAlignment="Center" TextAlignment="Center" />
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="22">
+                                    <StackPanel Spacing="12">
+                                        <TextBlock Text="按键" Style="{StaticResource SectionTitleStyle}" />
+                                        <TextBlock x:Name="ButtonsText" Text="无" MinHeight="70" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <Border Padding="0,20,0,0" BorderBrush="{ThemeResource BridgeStrokeBrush}" BorderThickness="0,1,0,0">
+                                        <StackPanel Spacing="14">
+                                            <TextBlock Text="扳机" Style="{StaticResource SectionTitleStyle}" />
+                                            <Grid ColumnSpacing="12">
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                                <TextBlock Text="L2" Style="{StaticResource BridgeMonoTextStyle}" />
+                                                <ProgressBar x:Name="LeftTriggerBar" Grid.Column="1" Height="8" Maximum="65535" Foreground="{ThemeResource SonyBrush}" Background="{ThemeResource BridgeInsetBrush}" VerticalAlignment="Center" AutomationProperties.Name="左扳机" />
+                                            </Grid>
+                                            <Grid ColumnSpacing="12">
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                                <TextBlock Text="R2" Style="{StaticResource BridgeMonoTextStyle}" />
+                                                <ProgressBar x:Name="RightTriggerBar" Grid.Column="1" Height="8" Maximum="65535" Foreground="{ThemeResource NintendoBrush}" Background="{ThemeResource BridgeInsetBrush}" VerticalAlignment="Center" AutomationProperties.Name="右扳机" />
+                                            </Grid>
+                                            <TextBlock x:Name="TriggersText" Text="L 0 / R 0" Style="{StaticResource BridgeMonoTextStyle}" />
+                                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
+                                                <Button x:Name="LocalRumbleButton" Click="LocalRumble_Click" IsEnabled="False" Padding="12,8">
+                                                    <StackPanel Orientation="Horizontal" Spacing="7"><SymbolIcon Symbol="Play" /><TextBlock Text="震动测试" /></StackPanel>
+                                                </Button>
+                                                <Button x:Name="LocalRumbleStopButton" Click="LocalRumbleStop_Click" IsEnabled="False" Style="{StaticResource IconButtonStyle}" VerticalAlignment="Center" ToolTipService.ToolTip="停止本机手柄震动" AutomationProperties.Name="停止本机手柄震动">
+                                                    <SymbolIcon Symbol="Stop" />
+                                                </Button>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Padding="0,20,0,0" BorderBrush="{ThemeResource BridgeStrokeBrush}" BorderThickness="0,1,0,0">
+                                        <StackPanel Spacing="14">
+                                            <TextBlock Text="运动传感器" Style="{StaticResource SectionTitleStyle}" />
+                                            <StackPanel Spacing="5">
+                                                <TextBlock Text="加速度" Style="{StaticResource QuietCaptionStyle}" />
+                                                <TextBlock x:Name="AccelText" Text="Accel：等待有效数据" Style="{StaticResource BridgeMonoTextStyle}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <StackPanel Spacing="5">
+                                                <TextBlock Text="陀螺仪" Style="{StaticResource QuietCaptionStyle}" />
+                                                <TextBlock x:Name="GyroText" Text="Gyro：等待有效数据" Style="{StaticResource BridgeMonoTextStyle}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <ScrollViewer x:Name="FeedbackPage" Visibility="Collapsed" Style="{StaticResource BridgePageScrollStyle}">
+                        <StackPanel MaxWidth="1180" HorizontalAlignment="Stretch" Spacing="24">
+                            <StackPanel Spacing="16">
+                                <TextBlock Text="接收器震动测试" Style="{StaticResource SectionTitleStyle}" />
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <Button Height="100" HorizontalAlignment="Stretch" Click="RumbleLeft_Click" CornerRadius="6" Background="{ThemeResource BridgeSurfaceBrush}" BorderBrush="{ThemeResource BridgeStrokeBrush}" AutomationProperties.Name="测试左侧震动">
+                                        <StackPanel Spacing="12" HorizontalAlignment="Center"><FontIcon Glyph="&#xE768;" FontSize="22" Foreground="{ThemeResource SonyBrush}" /><TextBlock Text="左侧" HorizontalAlignment="Center" /></StackPanel>
+                                    </Button>
+                                    <Button Grid.Column="1" Height="100" HorizontalAlignment="Stretch" Click="RumbleRight_Click" CornerRadius="6" Background="{ThemeResource BridgeSurfaceBrush}" BorderBrush="{ThemeResource BridgeStrokeBrush}" AutomationProperties.Name="测试右侧震动">
+                                        <StackPanel Spacing="12" HorizontalAlignment="Center"><FontIcon Glyph="&#xE768;" FontSize="22" Foreground="{ThemeResource NintendoBrush}" /><TextBlock Text="右侧" HorizontalAlignment="Center" /></StackPanel>
+                                    </Button>
+                                    <Button Grid.Column="2" Height="100" HorizontalAlignment="Stretch" Click="RumbleTest_Click" CornerRadius="6" Background="{ThemeResource BridgeAccentSoftBrush}" BorderBrush="{ThemeResource BridgeAccentBrush}" AutomationProperties.Name="测试双侧震动">
+                                        <StackPanel Spacing="12" HorizontalAlignment="Center"><FontIcon Glyph="&#xE768;" FontSize="22" Foreground="{ThemeResource BridgeAccentInkBrush}" /><TextBlock Text="双侧" HorizontalAlignment="Center" FontWeight="SemiBold" /></StackPanel>
+                                    </Button>
+                                    <Button Grid.Column="3" Height="100" HorizontalAlignment="Stretch" Click="RumbleStop_Click" CornerRadius="6" Background="{ThemeResource BridgeSurfaceBrush}" BorderBrush="{ThemeResource BridgeStrokeBrush}" AutomationProperties.Name="停止震动">
+                                        <StackPanel Spacing="12" HorizontalAlignment="Center"><FontIcon Glyph="&#xE71A;" FontSize="22" Foreground="{ThemeResource BridgeDangerInkBrush}" /><TextBlock Text="停止" HorizontalAlignment="Center" /></StackPanel>
+                                    </Button>
+                                </Grid>
+                                <TextBlock x:Name="RumbleStatusText" Text="活动输入：未读取" TextWrapping="Wrap" Style="{StaticResource QuietCaptionStyle}" />
+                            </StackPanel>
+                            <Border x:Name="AudioPanel" Padding="0,24" BorderBrush="{ThemeResource BridgeStrokeBrush}" BorderThickness="0,1,0,0">
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="28" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <FontIcon Glyph="&#xE8D6;" FontSize="26" Foreground="{ThemeResource SonyBrush}" VerticalAlignment="Top" Margin="0,3,0,0" />
+                                    <StackPanel Grid.Column="1" Spacing="8">
+                                        <TextBlock Text="DualSense 音频触觉" Style="{StaticResource SectionTitleStyle}" />
+                                        <TextBlock x:Name="AudioStatusText" Text="尚未读取" TextWrapping="Wrap" Style="{StaticResource QuietCaptionStyle}" />
+                                    </StackPanel>
+                                    <Button Grid.Column="2" Click="RefreshUsbAudio_Click" Style="{StaticResource IconButtonStyle}" VerticalAlignment="Top" ToolTipService.ToolTip="刷新接收器音频状态" AutomationProperties.Name="刷新接收器音频状态"><FontIcon Glyph="&#xE72C;" FontSize="16" /></Button>
+                                </Grid>
+                            </Border>
+                            <Expander Header="接收器震动调校" IsExpanded="False" Style="{StaticResource BridgeSectionExpanderStyle}">
+                                <Grid Padding="0,8,0,4" ColumnSpacing="24" RowSpacing="20">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                    <NumberBox x:Name="ScaleBox" Header="NS2Pro 强度 %" Minimum="5" Maximum="250" Value="60" SpinButtonPlacementMode="Compact" />
+                                    <NumberBox x:Name="HoldBox" Grid.Column="1" Header="保持时间 ms" Minimum="20" Maximum="3000" Value="140" SpinButtonPlacementMode="Compact" />
+                                    <NumberBox x:Name="TickBox" Grid.Row="1" Header="转发间隔 ms" Minimum="5" Maximum="100" Value="30" SpinButtonPlacementMode="Compact" />
+                                    <NumberBox x:Name="StopsBox" Grid.Row="1" Grid.Column="1" Header="停止包数量" Minimum="1" Maximum="12" Value="3" SpinButtonPlacementMode="Compact" />
+                                    <Button Grid.Row="2" Grid.ColumnSpan="2" HorizontalAlignment="Left" Click="ApplySettings_Click" Padding="14,9"><StackPanel Orientation="Horizontal" Spacing="8"><SymbolIcon Symbol="Accept" /><TextBlock Text="应用调校" /></StackPanel></Button>
+                                </Grid>
+                            </Expander>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <ScrollViewer x:Name="AdvancedPage" Visibility="Collapsed" Style="{StaticResource BridgePageScrollStyle}">
+                        <StackPanel MaxWidth="1180" HorizontalAlignment="Stretch" Spacing="24">
+                            <Grid ColumnSpacing="32">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="1.1*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                <StackPanel Spacing="16">
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <TextBlock Text="管理设备" Style="{StaticResource SectionTitleStyle}" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Click="RefreshDevices_Click" Style="{StaticResource IconButtonStyle}" ToolTipService.ToolTip="扫描设备与端口" AutomationProperties.Name="扫描设备与端口"><FontIcon Glyph="&#xE72C;" FontSize="16" /></Button>
+                                    </Grid>
+                                    <ListView x:Name="DeviceList" Height="200" SelectionMode="Single" BorderBrush="{ThemeResource BridgeStrokeBrush}" BorderThickness="1" CornerRadius="4" Background="{ThemeResource BridgeSurfaceBrush}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="管理设备与端口">
+                                        <ListView.ItemContainerStyle>
+                                            <Style TargetType="ListViewItem"><Setter Property="HorizontalContentAlignment" Value="Stretch" /></Style>
+                                        </ListView.ItemContainerStyle>
+                                        <ListView.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Padding="4,8" ColumnSpacing="12">
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="20" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                                    <FontIcon Glyph="&#xE839;" FontSize="18" Foreground="{ThemeResource BridgeSecondaryTextBrush}" VerticalAlignment="Top" Margin="0,3,0,0" />
+                                                    <StackPanel Grid.Column="1" Spacing="4">
+                                                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                                        <TextBlock Text="{Binding TransportLabel}" Style="{StaticResource QuietCaptionStyle}" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListView.ItemTemplate>
+                                    </ListView>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Button Click="Connect_Click" Padding="12,8"><StackPanel Orientation="Horizontal" Spacing="7"><FontIcon Glyph="&#xE71B;" FontSize="16" /><TextBlock Text="连接" /></StackPanel></Button>
+                                        <Button Click="Disconnect_Click" Padding="12,8"><StackPanel Orientation="Horizontal" Spacing="7"><SymbolIcon Symbol="DisconnectDrive" /><TextBlock Text="断开" /></StackPanel></Button>
+                                    </StackPanel>
+                                    <Border Padding="0,20,0,0" BorderBrush="{ThemeResource BridgeStrokeBrush}" BorderThickness="0,1,0,0">
+                                        <StackPanel Spacing="10">
+                                            <TextBlock Text="固件模块" Style="{StaticResource SectionTitleStyle}" />
+                                            <ListView x:Name="ModuleList" MaxHeight="168" SelectionMode="None" ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="固件模块">
+                                                <ListView.ItemContainerStyle>
+                                                    <Style TargetType="ListViewItem"><Setter Property="HorizontalContentAlignment" Value="Stretch" /></Style>
+                                                </ListView.ItemContainerStyle>
+                                                <ListView.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Padding="0,6" Spacing="4">
+                                                            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                                            <TextBlock Text="{Binding VersionLabel}" Style="{StaticResource QuietCaptionStyle}" TextWrapping="Wrap" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ListView.ItemTemplate>
+                                            </ListView>
+                                            <StackPanel Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
+                                                <Button Click="InstallModule_Click"><StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Download" /><TextBlock Text="导入模块包" /></StackPanel></Button>
+                                                <Button Click="ReloadModules_Click" Style="{StaticResource IconButtonStyle}" ToolTipService.ToolTip="重新加载已安装模块" AutomationProperties.Name="重新加载已安装模块"><FontIcon Glyph="&#xE72C;" FontSize="16" /></Button>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                    <HyperlinkButton Click="OpenClassicManager_Click" HorizontalAlignment="Left" Padding="0,8" Foreground="{ThemeResource BridgeAccentInkBrush}">
+                                        <StackPanel Orientation="Horizontal" Spacing="8"><TextBlock Text="经典诊断版" /><FontIcon Glyph="&#xE8A7;" FontSize="13" /></StackPanel>
+                                    </HyperlinkButton>
+                                </StackPanel>
+
+                                <StackPanel x:Name="DeviceSettingsPanel" Grid.Column="1" Spacing="24">
+                                    <StackPanel x:Name="SettingsControls" Spacing="16">
+                                        <TextBlock Text="设备设置" Style="{StaticResource SectionTitleStyle}" Margin="0,6,0,4" />
+                                        <NumberBox x:Name="RateBox" Header="USB 回报率 Hz" Minimum="60" Maximum="1000" Value="250" SpinButtonPlacementMode="Compact" />
+                                        <Grid ColumnSpacing="16">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                            <ToggleSwitch x:Name="RawSwitch" Header="Raw USB 诊断" />
+                                            <ToggleSwitch x:Name="ParseSwitch" Grid.Column="1" Header="实时解析" IsOn="True" />
+                                        </Grid>
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Button Click="ApplySettings_Click" Padding="12,8"><StackPanel Orientation="Horizontal" Spacing="7"><SymbolIcon Symbol="Accept" /><TextBlock Text="应用" /></StackPanel></Button>
+                                            <Button Click="SaveSettings_Click" Padding="12,8"><StackPanel Orientation="Horizontal" Spacing="7"><SymbolIcon Symbol="Save" /><TextBlock Text="保存到设备" /></StackPanel></Button>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <Border Padding="0,20,0,0" BorderBrush="{ThemeResource BridgeStrokeBrush}" BorderThickness="0,1,0,0">
+                                        <StackPanel Spacing="12">
+                                            <Grid ColumnSpacing="12">
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                                <TextBlock Text="自动检查" Style="{StaticResource SectionTitleStyle}" VerticalAlignment="Center" />
+                                                <Button Grid.Column="1" Click="TestAll_Click" Padding="10,7"><StackPanel Orientation="Horizontal" Spacing="7"><SymbolIcon Symbol="Repair" /><TextBlock Text="运行检查" /></StackPanel></Button>
+                                            </Grid>
+                                            <TextBox x:Name="TestResultBox" MinHeight="172" MaxHeight="280" Style="{StaticResource BridgeDiagnosticTextBoxStyle}" AutomationProperties.Name="自动检查结果" />
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+
+                            <StackPanel Spacing="0">
+                                <Expander Header="诊断摘要" IsExpanded="True" Style="{StaticResource BridgeSectionExpanderStyle}">
+                                    <TextBox x:Name="DiagnosticsBox" MinHeight="132" MaxHeight="320" Style="{StaticResource BridgeDiagnosticTextBoxStyle}" AutomationProperties.Name="诊断摘要" />
+                                </Expander>
+                                <Expander Header="原始 JSON" Style="{StaticResource BridgeSectionExpanderStyle}">
+                                    <TextBox x:Name="JsonBox" MinHeight="240" MaxHeight="440" Style="{StaticResource BridgeDiagnosticTextBoxStyle}" TextWrapping="NoWrap" ScrollViewer.HorizontalScrollBarVisibility="Auto" AutomationProperties.Name="原始 JSON" />
+                                </Expander>
+                                <Expander Header="命令与日志" Style="{StaticResource BridgeSectionExpanderStyle}">
+                                    <StackPanel Spacing="12">
+                                        <Grid ColumnSpacing="8">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                            <TextBox x:Name="CommandBox" Text="bridge status" PlaceholderText="manager 命令" FontFamily="Cascadia Mono" FontSize="13" AutomationProperties.Name="manager 命令" />
+                                            <Button Grid.Column="1" Click="SendRawCommand_Click" Padding="12,7"><StackPanel Orientation="Horizontal" Spacing="7"><FontIcon Glyph="&#xE724;" FontSize="16" /><TextBlock Text="发送" /></StackPanel></Button>
+                                        </Grid>
+                                        <TextBox x:Name="LogBox" MinHeight="200" MaxHeight="400" Style="{StaticResource BridgeDiagnosticTextBoxStyle}" AutomationProperties.Name="命令日志" />
+                                    </StackPanel>
+                                </Expander>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <ScrollViewer x:Name="DynamicModulePage" Visibility="Collapsed" Style="{StaticResource BridgePageScrollStyle}">
+                        <StackPanel x:Name="DynamicModulePageContent" MaxWidth="1180" HorizontalAlignment="Stretch" Spacing="24" />
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
+        </NavigationView>
+
+        <InfoBar x:Name="StatusBar" Grid.Row="1" IsOpen="True" IsClosable="True" Severity="Informational" Title="Controller Bridge" Message="正在查找设备。" BorderThickness="0,1,0,0" BorderBrush="{ThemeResource BridgeStrokeBrush}" CornerRadius="0" />
+    </Grid>
+</Window>

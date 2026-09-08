@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "name": "sftool",
+  "version": "0.1.16",
+  "target": "x86_64-pc-windows-msvc",
+  "repository": "https://github.com/OpenSiFli/sftool",
+  "sourceTag": "0.1.16",
+  "sourceCommit": "90125a2c77cd3f194e6acee0551ae530ac79ba4c",
+  "archive": {
+    "fileName": "sftool-0.1.16-x86_64-pc-windows-msvc.zip",
+    "url": "https://github.com/OpenSiFli/sftool/releases/download/0.1.16/sftool-0.1.16-x86_64-pc-windows-msvc.zip",
+    "sha256": "f35a6723c563126a0dc66906e9698f5103f11fe22f36adba9c4169aecb45f5ad",
+    "size": 4023731,
+    "checksumSource": "SiFli-SDK/tools/tools.json: tools[name=sftool].versions[name=0.1.16].win64"
+  },
+  "executable": {
+    "fileName": "sftool.exe",
+    "archiveEntry": "sftool.exe",
+    "sha256": "05e0d7d7e1dd1df82d064c0524191bb567c4c84a2f821635dfa341fb7c5665ce",
+    "size": 6945280,
+    "versionOutput": "sftool 0.1.16"
+  },
+  "license": {
+    "spdx": "Apache-2.0",
+    "fileName": "LICENSE.txt",
+    "sourceUrl": "https://raw.githubusercontent.com/OpenSiFli/sftool/90125a2c77cd3f194e6acee0551ae530ac79ba4c/LICENSE",
+    "sha256": "199b3d4fcd78e7426d4d30190359042b87735a449fbbd1885f5569d4d0178842",
+    "size": 11336,
+    "copyright": "Copyright 2025 SiFli"
+  },
+  "distribution": "Unmodified official release executable. Its SHA256 matches both the SDK-installed 0.1.16 executable and the executable extracted from the SDK-SHA256-verified official archive. The license is the exact source LICENSE at the pinned commit. No source NOTICE file exists at that commit. The SDK is not required at runtime."
+}

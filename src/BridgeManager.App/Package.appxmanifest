@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+  <Identity Name="PicoControllerBridge.BridgeManager" Publisher="CN=LocalDev" Version="0.1.0.0" />
+  <Properties>
+    <DisplayName>Bridge Manager</DisplayName>
+    <PublisherDisplayName>LocalDev</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+  <Applications>
+    <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="$targetentrypoint$">
+      <uap:VisualElements DisplayName="Bridge Manager" Description="Pico Controller Bridge management app" BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" />
+    </Application>
+  </Applications>
+  <Capabilities>
+    <DeviceCapability Name="humaninterfacedevice">
+      <Device Id="vidpid:cafe 4012">
+        <Function Type="usage:ff00 0001" />
+      </Device>
+      <Device Id="vidpid:045e 028e">
+        <Function Type="usage:ff00 0001" />
+      </Device>
+      <Device Id="vidpid:054c 0ce6">
+        <Function Type="usage:0001 0005" />
+      </Device>
+      <Device Id="vidpid:054c 0df2">
+        <Function Type="usage:0001 0005" />
+      </Device>
+      <Device Id="vidpid:057e 2069">
+        <Function Type="usage:ff00 0001" />
+      </Device>
+    </DeviceCapability>
+    <DeviceCapability Name="serialcommunication">
+      <Device Id="any">
+        <Function Type="name:serialPort" />
+      </Device>
+    </DeviceCapability>
+  </Capabilities>
+</Package>

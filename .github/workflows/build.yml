@@ -1,0 +1,21 @@
+name: Build and test
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore BridgeManager.sln -p:Platform=x64 --locked-mode
+      - name: Build
+        run: dotnet build BridgeManager.sln -p:Platform=x64 -c Release --no-restore
+      - name: Protocol and lifecycle tests
+        run: .\tests\BridgeManager.Core.Tests\bin\x64\Release\net8.0-windows10.0.19041.0\BridgeManager.Core.Tests.exe
+      - name: Offline release-lock tests
+        run: .\tools\test-firmware-packages.ps1

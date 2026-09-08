@@ -1,0 +1,811 @@
+{
+  "schemaVersion": 1,
+  "repository": "controllerbridge-manger",
+  "implementation": "source",
+  "preparationOnly": true,
+  "sourceUnchangedVerifiedAtUtc": "2026-09-08T14:55:06.0390779Z",
+  "provenance": "Working-file SHA256 snapshot; not a Git commit or build attestation.",
+  "files": [
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": ".gitattributes",
+      "destinationRelativePath": ".gitattributes",
+      "size": 343,
+      "sha256": "4725c98f05cf6467834ec885eeec5df9883f0d99316482d6865ddf4a6704e16c",
+      "lastWriteUtcTicks": 639167716754489062
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/BridgeManager.sln",
+      "destinationRelativePath": "BridgeManager.sln",
+      "size": 2323,
+      "sha256": "5e8de19d4f79cdd9d0a6722b1fd3f608175441f132b853d95bf0a237d4233559",
+      "lastWriteUtcTicks": 639231541249476310
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "LICENSE",
+      "destinationRelativePath": "LICENSE",
+      "size": 1084,
+      "sha256": "18959cac90c14ea1fbaf61e5068f627eb61a01bb69c695620fd4d6105bdecc7a",
+      "lastWriteUtcTicks": 639163031318701839
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "LICENSES/DS5Dongle-MIT.txt",
+      "destinationRelativePath": "LICENSES/DS5Dongle-MIT.txt",
+      "size": 1084,
+      "sha256": "18959cac90c14ea1fbaf61e5068f627eb61a01bb69c695620fd4d6105bdecc7a",
+      "lastWriteUtcTicks": 639163031318701839
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "LICENSES/HidSharp-Apache-2.0.txt",
+      "destinationRelativePath": "LICENSES/HidSharp-Apache-2.0.txt",
+      "size": 10784,
+      "sha256": "b065e07179f06490c96bf946e73f821086b2f29efde395f092aea69a907eae16",
+      "lastWriteUtcTicks": 638955164800000000
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "LICENSES/y700-switch2-pro-bridge-Apache-2.0.txt",
+      "destinationRelativePath": "LICENSES/y700-switch2-pro-bridge-Apache-2.0.txt",
+      "size": 11560,
+      "sha256": "de260a483f1c8a229d61d833aaabad9f9a7438f3384c59abefa50182cb798199",
+      "lastWriteUtcTicks": 639163031318761405
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/MODULE-FORMAT.md",
+      "destinationRelativePath": "MODULE-FORMAT.md",
+      "size": 6935,
+      "sha256": "b71a01462dd454d635ce7aa51a205472825d2b74824d0d6e1359510e48997b1c",
+      "lastWriteUtcTicks": 639231671256185212
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/modules/esp32s3-ns2-bridge/esp32s3-ns2-bridge.bridge-module.json",
+      "destinationRelativePath": "modules/esp32s3-ns2-bridge/esp32s3-ns2-bridge.bridge-module.json",
+      "size": 2765,
+      "sha256": "670664d3b5676e3b375c614f606fc48cda02879aadda60cce088cf79f3c9d823",
+      "lastWriteUtcTicks": 639243885498875719
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/modules/pico-unified-bridge/pico-unified-bridge.bridge-module.json",
+      "destinationRelativePath": "modules/pico-unified-bridge/pico-unified-bridge.bridge-module.json",
+      "size": 3780,
+      "sha256": "033597246ca812ad2d62b28a22a324728387525e10683b6324d869b2a1f34713",
+      "lastWriteUtcTicks": 639243867712264489
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/modules/sf32-unified/sf32-unified.bridge-module.json",
+      "destinationRelativePath": "modules/sf32-unified/sf32-unified.bridge-module.json",
+      "size": 8482,
+      "sha256": "cad2f8339cf0cfc8997617f6257fa1440928eb3657a78b40be3d9e459f8bff5d",
+      "lastWriteUtcTicks": 639244634636412045
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "NOTICE.md",
+      "destinationRelativePath": "NOTICE.md",
+      "size": 5713,
+      "sha256": "07611a42ecb1507480302d32bd93e4c07624ce5920ab8ce33b3a9ae00fa51791",
+      "lastWriteUtcTicks": 639231438629952219
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/README.md",
+      "destinationRelativePath": "README.md",
+      "size": 7453,
+      "sha256": "3600020992a1aad0b09133b075faac85e2f1a6755082d781f1ff40ce7fa79a83",
+      "lastWriteUtcTicks": 639243926732816995
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/schemas/module-v2.schema.json",
+      "destinationRelativePath": "schemas/module-v2.schema.json",
+      "size": 6237,
+      "sha256": "ec5893c21ca143142c0dc32bd87bb215cb8fe60fe596e01951372284e4b268df",
+      "lastWriteUtcTicks": 639244640883511719
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.App/app.manifest",
+      "destinationRelativePath": "src/BridgeManager.App/app.manifest",
+      "size": 430,
+      "sha256": "8dfb51a2be6035dd6f1b582db617fd5dcbe2fec5153c5eaf10e4963a79c490c8",
+      "lastWriteUtcTicks": 639186872963307516
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.App/App.xaml",
+      "destinationRelativePath": "src/BridgeManager.App/App.xaml",
+      "size": 498,
+      "sha256": "117247e94ac8a54219f9c85da94f0be84fc472c51607935d57c19208b9c7cbde",
+      "lastWriteUtcTicks": 639186872963138840
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.App/App.xaml.cs",
+      "destinationRelativePath": "src/BridgeManager.App/App.xaml.cs",
+      "size": 860,
+      "sha256": "6e0a275bdf7bbdac7b3af29ce0ebcf74962c14d8bfef4084e9e20afa498267e0",
+      "lastWriteUtcTicks": 639231019061865819
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.App/BridgeManager.App.csproj",
+      "destinationRelativePath": "src/BridgeManager.App/BridgeManager.App.csproj",
+      "size": 1105,
+      "sha256": "bd194984912ee273929e1615b7fc187a3e5c7317cd3d5d2a945b5bf1fdbdc3f3",
+      "lastWriteUtcTicks": 639231014305077063
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.App/MainWindow.xaml",
+      "destinationRelativePath": "src/BridgeManager.App/MainWindow.xaml",
+      "size": 17523,
+      "sha256": "9ca39419fb7d8bcde9735a594992067ff8923dfef197d94134c78c39aef54738",
+      "lastWriteUtcTicks": 639230988252359241
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.App/MainWindow.xaml.cs",
+      "destinationRelativePath": "src/BridgeManager.App/MainWindow.xaml.cs",
+      "size": 34213,
+      "sha256": "705658773f28ff2ee34359de1f24ab5f9615f69bccfc98fb045ee94553133e7c",
+      "lastWriteUtcTicks": 639231434944603049
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.App/Package.appxmanifest",
+      "destinationRelativePath": "src/BridgeManager.App/Package.appxmanifest",
+      "size": 1957,
+      "sha256": "16a7727470efbc562bd37b4c1388163f2c3c150d808f972d175e6827dc365d45",
+      "lastWriteUtcTicks": 639243884903016520
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/BridgeDeviceProfile.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/BridgeDeviceProfile.cs",
+      "size": 4582,
+      "sha256": "f7405bb8551c6a5d89316bf49cae69ef0044313d32c71488bbeb5aff2b1f382f",
+      "lastWriteUtcTicks": 639243884652258753
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/BridgeDiagnostics.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/BridgeDiagnostics.cs",
+      "size": 4773,
+      "sha256": "6878ff7eebf88ba6fdf6d04dba98679116c6cbc56265228beba7ea40fcbdc922",
+      "lastWriteUtcTicks": 639230995240337524
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/BridgeManager.Core.csproj",
+      "destinationRelativePath": "src/BridgeManager.Core/BridgeManager.Core.csproj",
+      "size": 411,
+      "sha256": "73362eaa3d7c145744009ccd4ec51d4968554021b58fe3de8756539767939a7a",
+      "lastWriteUtcTicks": 639231014305097034
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/BridgeRoles.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/BridgeRoles.cs",
+      "size": 3769,
+      "sha256": "922e3ef4d9e6f8ea4da5ea6b32b85da9d04b493d2bb9e839ffb1748e09b7ace8",
+      "lastWriteUtcTicks": 639230987087540726
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/BridgeStatusSnapshot.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/BridgeStatusSnapshot.cs",
+      "size": 12372,
+      "sha256": "260b99aa2e910dca4521d9b79228d4c20e09b03d43fe1e5b0db32321b2f29617",
+      "lastWriteUtcTicks": 639231424222631614
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/ControllerInputDecoder.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/ControllerInputDecoder.cs",
+      "size": 6626,
+      "sha256": "b5338837497ceba2bf20988bf91b7d7370a7a7e8f267bdd3585ee2751904c87d",
+      "lastWriteUtcTicks": 639230530156266128
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/DeviceDescriptor.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/DeviceDescriptor.cs",
+      "size": 873,
+      "sha256": "d9af1dc8a49cc47c4483e558da60547fbda7857190ed11da0bc60bc092038983",
+      "lastWriteUtcTicks": 639231612918948803
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/DeviceReconnectSelector.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/DeviceReconnectSelector.cs",
+      "size": 1758,
+      "sha256": "0e630f6d9ceb3cd0035ba4f99e406f586c7c8bfc1f90e8e06168e6a0befd652a",
+      "lastWriteUtcTicks": 639230993899401388
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/FirmwareModules/BridgeButtonMapping.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/FirmwareModules/BridgeButtonMapping.cs",
+      "size": 4842,
+      "sha256": "59a65a8f9ccf1b4809a30f6a0f3dcf06770ac7c67133c48e1a8004d45e9df7f6",
+      "lastWriteUtcTicks": 639244631476741501
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/FirmwareModules/BridgeCapability.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/FirmwareModules/BridgeCapability.cs",
+      "size": 647,
+      "sha256": "65995232121a31cb96f4d5e1b5785f9bff0e582a06ae943758ed4b7667b9c752",
+      "lastWriteUtcTicks": 639231555549525817
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/FirmwareModules/BridgeDynamicModuleDefinition.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/FirmwareModules/BridgeDynamicModuleDefinition.cs",
+      "size": 3007,
+      "sha256": "43b4351d7ef27a87b27a49c0ab63a7a83adba22bcf7c44e9b2197b7abedeca43",
+      "lastWriteUtcTicks": 639243978904325015
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/FirmwareModules/BridgeDynamicModuleValidator.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/FirmwareModules/BridgeDynamicModuleValidator.cs",
+      "size": 13928,
+      "sha256": "937c69950bce2dcdbf9cba21e24c656d5b91a5467c2078a17a0399dc67b2b329",
+      "lastWriteUtcTicks": 639244640883481443
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/FirmwareModules/BridgeFirmwareModuleRegistry.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/FirmwareModules/BridgeFirmwareModuleRegistry.cs",
+      "size": 4710,
+      "sha256": "4704da36fc66c23c4b910abb49d2d4b14dbf38b44b44f56040c7de4cd69e75ce",
+      "lastWriteUtcTicks": 639243847903501166
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/FirmwareModules/BridgeModuleManifest.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/FirmwareModules/BridgeModuleManifest.cs",
+      "size": 1249,
+      "sha256": "69951771731a0ae58e10f461c5f19a23a9d158a586d0d9df5cfd9a4cb58522db",
+      "lastWriteUtcTicks": 639231555549541742
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/FirmwareModules/BridgeModuleOperationEngine.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/FirmwareModules/BridgeModuleOperationEngine.cs",
+      "size": 3239,
+      "sha256": "5feab357ff2ee27c1ca3acf1197f65001381a81262d769cefb719a06fd12eab2",
+      "lastWriteUtcTicks": 639231669163998205
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/FirmwareModules/BridgeModulePackage.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/FirmwareModules/BridgeModulePackage.cs",
+      "size": 23799,
+      "sha256": "fcea0df8f525c104970550181a4619b33e7a89a1a522addd4773e373711d577e",
+      "lastWriteUtcTicks": 639231658779205047
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/FirmwareModules/BridgeModuleVersion.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/FirmwareModules/BridgeModuleVersion.cs",
+      "size": 3874,
+      "sha256": "3f84686c4cd6d662e19f0bf82982dea961d2e50c3ba3c20c4a17d9eb6fe48720",
+      "lastWriteUtcTicks": 639231609097849802
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/FirmwareModules/BuiltInFirmwareModules.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/FirmwareModules/BuiltInFirmwareModules.cs",
+      "size": 15993,
+      "sha256": "e140c4048acb7967a3a973022360b50e50aafbe1b396d81297909d8a5419fb7b",
+      "lastWriteUtcTicks": 639243884651905854
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/FirmwareModules/FirmwareFlashService.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/FirmwareModules/FirmwareFlashService.cs",
+      "size": 24814,
+      "sha256": "874f3ea634e85c333d9e73fbde7b164f188ab5a288685f5c3bac27d7476137ca",
+      "lastWriteUtcTicks": 639244704118329679
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/FirmwareModules/GithubModuleReleaseService.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/FirmwareModules/GithubModuleReleaseService.cs",
+      "size": 6937,
+      "sha256": "780f75cff8fb7feb299a54bd95c3f375facfcae7dcf0f6a4c3cf5d53303c333d",
+      "lastWriteUtcTicks": 639231615810820902
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/FirmwareModules/IBridgeFirmwareModule.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/FirmwareModules/IBridgeFirmwareModule.cs",
+      "size": 1303,
+      "sha256": "e849fd94006ebe66719a6fbaf86e8b8e06922c26fd3ee0543c9ca44971a28963",
+      "lastWriteUtcTicks": 639231658779237075
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/LocalControllerInputConverter.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/LocalControllerInputConverter.cs",
+      "size": 5811,
+      "sha256": "0e6d9c3601393c6909c160c81a18a78fc9c220738a7816b01c971c67c8dcece7",
+      "lastWriteUtcTicks": 639244720681111480
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/LocalControllerService.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/LocalControllerService.cs",
+      "size": 17803,
+      "sha256": "281fa614b151791d6a5f87d145ce6cbb46b0a0008b253e327a50320c561c3f26",
+      "lastWriteUtcTicks": 639244748231101926
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/ManagerProtocol.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/ManagerProtocol.cs",
+      "size": 419,
+      "sha256": "63dbcfbe340a3ba3768f07d2f33e617dd4f4dd262837b41581485d3d31f8ad78",
+      "lastWriteUtcTicks": 639230483346492368
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/Properties/AssemblyInfo.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/Properties/AssemblyInfo.cs",
+      "size": 99,
+      "sha256": "d33ec00011331c3d40c19553f8d039bdf324b900854f280d17d31283e6533247",
+      "lastWriteUtcTicks": 639244704118349726
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/Protocol/FeatureReportProtocol.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/Protocol/FeatureReportProtocol.cs",
+      "size": 3942,
+      "sha256": "a1c3dd1815262e56728e846d55d8f1de3ed78d68c39b08e684b42bb25c3610ae",
+      "lastWriteUtcTicks": 639230987942476894
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/Protocol/ManagerCommandClient.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/Protocol/ManagerCommandClient.cs",
+      "size": 4948,
+      "sha256": "a65b15a0a25df1b051941a06c84650d333659f3ef2896b92e20270300b0efe61",
+      "lastWriteUtcTicks": 639231632268099725
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/Protocol/ManagerCommandException.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/Protocol/ManagerCommandException.cs",
+      "size": 187,
+      "sha256": "5ba44d1a18f0bed4ee4d59d6a5d99092ca4439c60eb0e66c3290da11389fc821",
+      "lastWriteUtcTicks": 639186871977775604
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/Protocol/ManagerCommands.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/Protocol/ManagerCommands.cs",
+      "size": 1672,
+      "sha256": "bbaec5d08c07686ea9f595b7a8685b0834de250be7d441b29762a47b436c362f",
+      "lastWriteUtcTicks": 639230994644892668
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/Transports/BridgeTransportFactory.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/Transports/BridgeTransportFactory.cs",
+      "size": 1144,
+      "sha256": "194af9315c905372696bec6b07b6c8a0e5d2d4502c0b826d4d0fd03f648bd3b3",
+      "lastWriteUtcTicks": 639231613521601968
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/Transports/IDeviceTransport.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/Transports/IDeviceTransport.cs",
+      "size": 1180,
+      "sha256": "c13bcb1d3b1a27981563e1eda7018789b94743fdf615f85208a738f403d54879",
+      "lastWriteUtcTicks": 639231037997894591
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/Transports/IDeviceTransportFactory.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/Transports/IDeviceTransportFactory.cs",
+      "size": 288,
+      "sha256": "7c9f06573df07170e37c380d5d70acb9f6636b731d283ccfcf9a3c7b4c13e298",
+      "lastWriteUtcTicks": 639186871977752286
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/Transports/SerialBridgeTransport.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/Transports/SerialBridgeTransport.cs",
+      "size": 5994,
+      "sha256": "79e39d0d08846fb639460db1aeed64153bc6dff6f8c747c100e63e4c2fa73db1",
+      "lastWriteUtcTicks": 639196301054217823
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/Transports/SerialBridgeTransportFactory.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/Transports/SerialBridgeTransportFactory.cs",
+      "size": 1323,
+      "sha256": "8e1593e158c85acffd15bcaa83a470bf097c0ca0196cdce15be3553f24515694",
+      "lastWriteUtcTicks": 639231597868683410
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/Transports/WindowsHidTransport.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/Transports/WindowsHidTransport.cs",
+      "size": 5358,
+      "sha256": "7c42c3159de0e015398b1f0b2dfc76943f0dc1e025e7270ce2ec73c67b8e055c",
+      "lastWriteUtcTicks": 639231037997916440
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Core/Transports/WindowsHidTransportFactory.cs",
+      "destinationRelativePath": "src/BridgeManager.Core/Transports/WindowsHidTransportFactory.cs",
+      "size": 5371,
+      "sha256": "a2505d9d290caa3a9f96f4d45aafdf5e081939d649346df19487059d00a94a5a",
+      "lastWriteUtcTicks": 639231614066326101
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Modern.App/app.manifest",
+      "destinationRelativePath": "src/BridgeManager.Modern.App/app.manifest",
+      "size": 437,
+      "sha256": "9fd7bdf236a09ed82dd99badd09f08b82cdd665225330feecb406e2b0aa7a5fc",
+      "lastWriteUtcTicks": 639231541249444972
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Modern.App/App.xaml",
+      "destinationRelativePath": "src/BridgeManager.Modern.App/App.xaml",
+      "size": 9129,
+      "sha256": "78f5d9cf04c702b0e782404687bcd85bd13c3362390aa24889c861a6dbf042d3",
+      "lastWriteUtcTicks": 639244726769498906
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Modern.App/App.xaml.cs",
+      "destinationRelativePath": "src/BridgeManager.Modern.App/App.xaml.cs",
+      "size": 2822,
+      "sha256": "22ff4ab02d542d236664dade2223413cb2c82b6de82bfe199f13e801f01f74cb",
+      "lastWriteUtcTicks": 639244731356091301
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Modern.App/BridgeManager.Modern.App.csproj",
+      "destinationRelativePath": "src/BridgeManager.Modern.App/BridgeManager.Modern.App.csproj",
+      "size": 1464,
+      "sha256": "4a9210912551182e63b22c8c3d42886c379c511bf8b31134c44d72fd56a66201",
+      "lastWriteUtcTicks": 639231566682043663
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Modern.App/ControllerArtwork.cs",
+      "destinationRelativePath": "src/BridgeManager.Modern.App/ControllerArtwork.cs",
+      "size": 19160,
+      "sha256": "0dc2e643e09c4b48551f3b60b3514687a186f8fde8570bba9edd64bbc826a924",
+      "lastWriteUtcTicks": 639244750805072053
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Modern.App/ControllerMappingDiagram.cs",
+      "destinationRelativePath": "src/BridgeManager.Modern.App/ControllerMappingDiagram.cs",
+      "size": 28327,
+      "sha256": "39be875601f8959b6262c6de1b27b483c4ecb860a812d2805c9f924623cebcd7",
+      "lastWriteUtcTicks": 639244689009800277
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Modern.App/DynamicModulePageRenderer.cs",
+      "destinationRelativePath": "src/BridgeManager.Modern.App/DynamicModulePageRenderer.cs",
+      "size": 37502,
+      "sha256": "f3a38665bf7766209d8d1fb83a0e3b76288d3177ba19145e4e94a479a9ae2106",
+      "lastWriteUtcTicks": 639244689009780256
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Modern.App/DynamicModulePageRenderer.SmokeTests.cs",
+      "destinationRelativePath": "src/BridgeManager.Modern.App/DynamicModulePageRenderer.SmokeTests.cs",
+      "size": 14741,
+      "sha256": "73956b39c5082ed6e149be27ee7a7cdacecd490b271d8537788de299d2ed3176",
+      "lastWriteUtcTicks": 639244689009829573
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Modern.App/MainWindow.LocalInput.cs",
+      "destinationRelativePath": "src/BridgeManager.Modern.App/MainWindow.LocalInput.cs",
+      "size": 12207,
+      "sha256": "d8da6657f55eb4dcb1812580426f3cfdee3f1cfb24fad99087e9b9577809c5ab",
+      "lastWriteUtcTicks": 639244748735271616
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Modern.App/MainWindow.SmokeTests.cs",
+      "destinationRelativePath": "src/BridgeManager.Modern.App/MainWindow.SmokeTests.cs",
+      "size": 5101,
+      "sha256": "ffd2bb51c05ef92ed41c6075e7a43a5c3afcaf0d187aff6ba710bc9a19d35411",
+      "lastWriteUtcTicks": 639244749347452214
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Modern.App/MainWindow.xaml",
+      "destinationRelativePath": "src/BridgeManager.Modern.App/MainWindow.xaml",
+      "size": 50650,
+      "sha256": "2ce39803d07fc4bc7fb164a33e94bb0dfbe2bde86acb6ae346a19e5e513b580f",
+      "lastWriteUtcTicks": 639244726769473162
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Modern.App/MainWindow.xaml.cs",
+      "destinationRelativePath": "src/BridgeManager.Modern.App/MainWindow.xaml.cs",
+      "size": 57354,
+      "sha256": "ce37a0368bee7a421406b6a4bc0e3fdc64b2b35e08235599aac053bc0d6439c2",
+      "lastWriteUtcTicks": 639244748193223106
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Modern.App/ModuleUiModels.cs",
+      "destinationRelativePath": "src/BridgeManager.Modern.App/ModuleUiModels.cs",
+      "size": 2206,
+      "sha256": "dcca3eb73a1acdbdc97a448c6cd412d2fca42feb02abbd033968caa1537bb193",
+      "lastWriteUtcTicks": 639244708996640989
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Modern.App/Package.appxmanifest",
+      "destinationRelativePath": "src/BridgeManager.Modern.App/Package.appxmanifest",
+      "size": 1965,
+      "sha256": "aff5039cc7106d65c730cec7e3c6c588501ddc821c533a89e390e1225b9cb7aa",
+      "lastWriteUtcTicks": 639243884902666077
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Modern.App/SetupWizardWindow.SmokeTests.cs",
+      "destinationRelativePath": "src/BridgeManager.Modern.App/SetupWizardWindow.SmokeTests.cs",
+      "size": 2555,
+      "sha256": "13f02118363f26b34c49b038547c200d3a57135b27c24b0d74529416d264b5fc",
+      "lastWriteUtcTicks": 639244731356071295
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Modern.App/SetupWizardWindow.xaml",
+      "destinationRelativePath": "src/BridgeManager.Modern.App/SetupWizardWindow.xaml",
+      "size": 18926,
+      "sha256": "2287d5a2c3c22f196c5721d666640b59d764c6fe03f7ea46a1a05c95acffaa9f",
+      "lastWriteUtcTicks": 639244708996700940
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Modern.App/SetupWizardWindow.xaml.cs",
+      "destinationRelativePath": "src/BridgeManager.Modern.App/SetupWizardWindow.xaml.cs",
+      "size": 27085,
+      "sha256": "2654059130863eff38b55e303cf96d93582a739821b24d250897d645c7093538",
+      "lastWriteUtcTicks": 639244743450225231
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/src/BridgeManager.Modern.App/SmokeCapture.cs",
+      "destinationRelativePath": "src/BridgeManager.Modern.App/SmokeCapture.cs",
+      "size": 1471,
+      "sha256": "3a15d975779f9d518466160fc5ab0f5d32d7630fc67d5cf9165659a47c18d0dc",
+      "lastWriteUtcTicks": 639244743450245212
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/tests/BridgeManager.Core.Tests/BridgeManager.Core.Tests.csproj",
+      "destinationRelativePath": "tests/BridgeManager.Core.Tests/BridgeManager.Core.Tests.csproj",
+      "size": 407,
+      "sha256": "003d6aea56a512e0b4998e667f7f481a87d6183b627ebda6b2d805c0be246b46",
+      "lastWriteUtcTicks": 639231014305127197
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/tests/BridgeManager.Core.Tests/FirmwareFlashTests.cs",
+      "destinationRelativePath": "tests/BridgeManager.Core.Tests/FirmwareFlashTests.cs",
+      "size": 5462,
+      "sha256": "6a0ec2334f8b9561adea926d95a09fd62a28eadb4bc81eb351e6f93a3fad80c0",
+      "lastWriteUtcTicks": 639244717593888040
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/tests/BridgeManager.Core.Tests/LocalControllerTests.cs",
+      "destinationRelativePath": "tests/BridgeManager.Core.Tests/LocalControllerTests.cs",
+      "size": 26430,
+      "sha256": "d7297fd6bd0a3aab152411ee21fe40facc148e1d656f11442f1256fa0221f71c",
+      "lastWriteUtcTicks": 639244748231140718
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/tests/BridgeManager.Core.Tests/Program.cs",
+      "destinationRelativePath": "tests/BridgeManager.Core.Tests/Program.cs",
+      "size": 62033,
+      "sha256": "ba98945a2221d3914c6de5aa62820eeec89883f3df2c31c74dea86da9e1dd67b",
+      "lastWriteUtcTicks": 639244729412230370
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/tools/bundle-sftool.ps1",
+      "destinationRelativePath": "tools/bundle-sftool.ps1",
+      "size": 4701,
+      "sha256": "3bab13197be53c35bc7a7081591540138952c24f7777015ef6e15f8caacca134",
+      "lastWriteUtcTicks": 639244710761717921
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/tools/new-module.ps1",
+      "destinationRelativePath": "tools/new-module.ps1",
+      "size": 3954,
+      "sha256": "4ee8d4ac5e0eea21d206b8a6917f9af260888bcbad8f705faa35c61e6ac6ecd8",
+      "lastWriteUtcTicks": 639231666392011286
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/tools/pack-module-directory.ps1",
+      "destinationRelativePath": "tools/pack-module-directory.ps1",
+      "size": 7372,
+      "sha256": "19992298a28b8fb2990659bd3e9d8b58de01cf451957974c9872b335f9426587",
+      "lastWriteUtcTicks": 639231666392001270
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/tools/package-firmware-module.ps1",
+      "destinationRelativePath": "tools/package-firmware-module.ps1",
+      "size": 4668,
+      "sha256": "427f3009becaacf3912d2564d647519e3113f104f3065d29e3e8c64225a445a2",
+      "lastWriteUtcTicks": 639243858122159006
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/tools/package-modern-windows.ps1",
+      "destinationRelativePath": "tools/package-modern-windows.ps1",
+      "size": 6841,
+      "sha256": "ad030ab939856a64f5fd0720d651a64edabf977555297270e9516318d506a77b",
+      "lastWriteUtcTicks": 639244705874483958
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/tools/package-windows.ps1",
+      "destinationRelativePath": "tools/package-windows.ps1",
+      "size": 4280,
+      "sha256": "5e52e8fe5f274261650dc91bd66761e934bdd2b9fcab9925f20f662c2a117505",
+      "lastWriteUtcTicks": 639231024221502410
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/tools/vendor/sftool/.gitignore",
+      "destinationRelativePath": "tools/vendor/sftool/.gitignore",
+      "size": 8,
+      "sha256": "c2e96c83bf636bce02ba317c77b9670ceeb39718d88b3632f61e9a29951364fc",
+      "lastWriteUtcTicks": 639244705874389425
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/tools/vendor/sftool/LICENSE.txt",
+      "destinationRelativePath": "tools/vendor/sftool/LICENSE.txt",
+      "size": 11336,
+      "sha256": "199b3d4fcd78e7426d4d30190359042b87735a449fbbd1885f5569d4d0178842",
+      "lastWriteUtcTicks": 639244705874429420
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/tools/vendor/sftool/PROVENANCE.json",
+      "destinationRelativePath": "tools/vendor/sftool/PROVENANCE.json",
+      "size": 1551,
+      "sha256": "90834d720be07a69f3cae45bbb29a14136db1daf52363cd56f0a7e7237e2b666",
+      "lastWriteUtcTicks": 639244705874409417
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/tools/verify-modern-package.ps1",
+      "destinationRelativePath": "tools/verify-modern-package.ps1",
+      "size": 9572,
+      "sha256": "5c5c6fa73e69d35b6d02340867c99b25271abddcb350c760d60aa504b3e24c29",
+      "lastWriteUtcTicks": 639244710761677914
+    },
+    {
+      "repository": "controllerbridge-manger",
+      "source": "main",
+      "sourceRelativePath": "apps/BridgeManager/tools/verify-package.ps1",
+      "destinationRelativePath": "tools/verify-package.ps1",
+      "size": 2218,
+      "sha256": "a178ba4e74dcd461ec8066048ebb632baf2a986a8f9e0b6ffa6ad9a64c9f40a6",
+      "lastWriteUtcTicks": 639231024294709161
+    }
+  ]
+}
