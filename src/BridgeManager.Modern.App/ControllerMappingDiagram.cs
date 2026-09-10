@@ -39,6 +39,7 @@ internal sealed class ControllerMappingDiagram : StackPanel
     private bool _loaded;
     private bool _busy;
     private bool _deviceDirty;
+    private bool _detached;
     private int _group;
     private double _layoutWidth;
     private bool _layoutPending;
@@ -60,8 +61,13 @@ internal sealed class ControllerMappingDiagram : StackPanel
         bool includeCrossIdentityTargets = true)
     {
         _profile = profile;
-        _selectors = selectors;
-        _captureButtons = captureButtons;
+        // Renderer dictionaries are reused for the next route. Keep the exact
+        // controls owned by this diagram so delayed XAML callbacks cannot see
+        // a cleared or repopulated dictionary from another page.
+        _selectors = new Dictionary<string, ComboBox>(selectors,
+            StringComparer.OrdinalIgnoreCase);
+        _captureButtons = new Dictionary<string, Button>(captureButtons,
+            StringComparer.OrdinalIgnoreCase);
         _label = label;
         _sourceLabel = sourceLabel ?? label;
         _sourceProfile = sourceProfile ?? profile;
@@ -157,9 +163,14 @@ internal sealed class ControllerMappingDiagram : StackPanel
                 if (IsLoaded) LayoutDiagram();
             });
         };
-        Unloaded += (_, _) => CloseEditor();
+        Unloaded += (_, _) =>
+        {
+            _detached = true;
+            CloseEditor(refresh: false);
+        };
         ActualThemeChanged += (_, _) =>
         {
+            if (_detached) return;
             CloseEditor();
             _layoutWidth = 0;
             LayoutDiagram();
@@ -171,6 +182,7 @@ internal sealed class ControllerMappingDiagram : StackPanel
 
     public void Refresh(bool loaded, bool busy, IReadOnlyDictionary<string, string> device, bool deviceDirty)
     {
+        if (_detached) return;
         _loaded = loaded;
         _busy = busy;
         _device = device;
@@ -309,7 +321,7 @@ internal sealed class ControllerMappingDiagram : StackPanel
         });
     }
 
-    public void CloseEditor()
+    public void CloseEditor(bool refresh = true)
     {
         var editor = _editor;
         _editor = null;
@@ -324,12 +336,12 @@ internal sealed class ControllerMappingDiagram : StackPanel
         }
         editor?.Hide();
         _cancelCapture();
-        RefreshLineColors();
+        if (refresh && !_detached) RefreshLineColors();
     }
 
     private void LayoutDiagram()
     {
-        if (ActualWidth <= 0) return;
+        if (_detached || ActualWidth <= 0) return;
         var width = ActualWidth;
         var changedSize = Math.Abs(width - _layoutWidth) >= 1;
         if (changedSize) CloseEditor();
@@ -564,6 +576,7 @@ internal sealed class ControllerMappingDiagram : StackPanel
 
     private void Highlight(string target)
     {
+        if (_detached) return;
         RefreshLineColors();
         if (_lines.TryGetValue(target, out var line))
         {
@@ -580,6 +593,7 @@ internal sealed class ControllerMappingDiagram : StackPanel
 
     private void RefreshLineColors()
     {
+        if (_detached) return;
         foreach (var (target, line) in _lines)
         {
             var active = _selectedTarget == target || _loaded && Source(target) != target;
@@ -595,7 +609,10 @@ internal sealed class ControllerMappingDiagram : StackPanel
         }
     }
 
-    private string Source(string target) => _selectors[target].SelectedValue?.ToString() ?? "none";
+    private string Source(string target) =>
+        _selectors.TryGetValue(target, out var selector)
+            ? selector.SelectedValue?.ToString() ?? "none"
+            : "none";
 
     private string ShortLabel(string target) => target switch
     {

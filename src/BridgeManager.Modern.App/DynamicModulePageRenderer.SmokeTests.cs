@@ -203,8 +203,12 @@ internal sealed partial class DynamicModulePageRenderer
         {
             await renderer.RenderAsync(psPage, host);
             await Task.Delay(35);
-            renderer._mappingDiagram!.OpenEditor("south");
+            var retiredDiagram = renderer._mappingDiagram!;
+            retiredDiagram.OpenEditor("south");
             await renderer.RenderAsync(nsPage, host);
+            // Reproduce a delayed Unloaded/flyout callback after the renderer
+            // has cleared and populated its dictionaries for another route.
+            retiredDiagram.CloseEditor();
             await Task.Delay(35);
         }
         foreach (var route in module.Pages.Where(page => page.Sections.SelectMany(section => section.Controls)
