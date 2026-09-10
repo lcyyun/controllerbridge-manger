@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "runtimeApiVersion": 2,
   "id": "sf32-unified",
-  "moduleVersion": "0.5.0-dev",
+  "moduleVersion": "0.6.0-dev",
   "displayName": "SF32 Unified Bridge",
   "boardFamily": "SiFli SF32LB52",
   "description": "SF32LB52 上统一接收 DualSense 与 Nintendo NS2Pro。",
@@ -45,7 +45,7 @@
     {
       "id": "sf32-unified-current",
       "displayName": "SF32 Unified Bridge",
-      "version": "0.5.0-dev",
+      "version": "0.6.0-dev",
       "description": "DS5 Classic、NS2Pro BLE、震动与 USB Audio。",
       "boardIds": ["sf32lb52-devkit-nano"],
       "flashMethod": "SifliSerial",
@@ -117,19 +117,19 @@
     },
     "mapping.read": {
       "transport": "ManagerCommand",
-      "request": "mapping get {profile}"
+      "request": "mapping get {profile} {output}"
     },
     "mapping.set": {
       "transport": "ManagerCommand",
-      "request": "mapping set {profile} {target} {source}"
+      "request": "mapping set {profile} {output} {target} {source}"
     },
     "mapping.reset": {
       "transport": "ManagerCommand",
-      "request": "mapping reset {profile}"
+      "request": "mapping reset {profile} {output}"
     },
     "mapping.save": {
       "transport": "ManagerCommand",
-      "request": "mapping save {profile}"
+      "request": "mapping save {profile} {output}"
     }
   },
   "pages": [
@@ -188,8 +188,8 @@
     },
     {
       "id": "ps-mapping",
-      "label": "PS / DS5 映射",
-      "description": "输入手柄：DualSense / DualSense Edge",
+      "label": "DualSense → DualSense",
+      "description": "输入：DualSense / DualSense Edge；输出：DualSense。需要 mapping_schema 3 固件。",
       "icon": "Keyboard",
       "sections": [
         {
@@ -201,6 +201,63 @@
               "type": "MappingEditor",
               "label": "PS / DualSense 按键来源",
               "mappingProfile": "ds5",
+              "mappingOutput": "ds5",
+              "binding": "/entries",
+              "sourceCatalog": "controller.inputControls",
+              "targetCatalog": "bridge.outputControls",
+              "readAction": "mapping.read",
+              "applyAction": "mapping.set",
+              "resetAction": "mapping.reset",
+              "saveAction": "mapping.save"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ps-ns-mapping",
+      "label": "DualSense → NS2Pro",
+      "description": "输入：DualSense / DualSense Edge；输出：Nintendo NS2Pro。需要 mapping_schema 3 固件。",
+      "icon": "Keyboard",
+      "sections": [
+        {
+          "id": "ps-ns-layout",
+          "label": "目标按键 ← 来源按键",
+          "controls": [
+            {
+              "id": "ps-ns-button-map",
+              "type": "MappingEditor",
+              "label": "DualSense → NS2Pro 按键来源",
+              "mappingProfile": "ds5",
+              "mappingOutput": "ns2pro",
+              "binding": "/entries",
+              "sourceCatalog": "controller.inputControls",
+              "targetCatalog": "bridge.outputControls",
+              "readAction": "mapping.read",
+              "applyAction": "mapping.set",
+              "resetAction": "mapping.reset",
+              "saveAction": "mapping.save"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ns-ps-mapping",
+      "label": "NS2Pro → DualSense",
+      "description": "输入：Nintendo NS2Pro；输出：DualSense。需要 mapping_schema 3 固件。",
+      "icon": "GameController",
+      "sections": [
+        {
+          "id": "ns-ps-layout",
+          "label": "目标按键 ← 来源按键",
+          "controls": [
+            {
+              "id": "ns-ps-button-map",
+              "type": "MappingEditor",
+              "label": "NS2Pro → DualSense 按键来源",
+              "mappingProfile": "ns2pro",
+              "mappingOutput": "ds5",
               "binding": "/entries",
               "sourceCatalog": "controller.inputControls",
               "targetCatalog": "bridge.outputControls",
@@ -215,8 +272,8 @@
     },
     {
       "id": "ns-mapping",
-      "label": "NS2Pro 映射",
-      "description": "输入手柄：Nintendo NS2Pro",
+      "label": "NS2Pro → NS2Pro",
+      "description": "输入：Nintendo NS2Pro；输出：Nintendo NS2Pro。需要 mapping_schema 3 固件。",
       "icon": "GameController",
       "sections": [
         {
@@ -228,6 +285,7 @@
               "type": "MappingEditor",
               "label": "NS2Pro 按键来源",
               "mappingProfile": "ns2pro",
+              "mappingOutput": "ns2pro",
               "binding": "/entries",
               "sourceCatalog": "controller.inputControls",
               "targetCatalog": "bridge.outputControls",

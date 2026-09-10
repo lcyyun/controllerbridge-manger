@@ -67,6 +67,8 @@ internal sealed partial class DynamicModulePageRenderer
     private string _usbReportSource = "";
     private string? _captureTarget;
     private uint _previousButtons;
+    public bool IsApplyingMapping { get; private set; }
+    public event Action<bool>? MappingWriteStateChanged;
 
     public DynamicModulePageRenderer(
         Func<string, IReadOnlyDictionary<string, string>, Task<JsonElement>>
@@ -85,6 +87,7 @@ internal sealed partial class DynamicModulePageRenderer
     public async Task RenderAsync(BridgeModulePageDefinition page,
                                   StackPanel host)
     {
+        if (IsApplyingMapping) return;
         RememberDraft();
         _mappingVersion++;
         CancelCapture();
@@ -186,7 +189,7 @@ internal sealed partial class DynamicModulePageRenderer
     }
 
     public void OnInputSnapshot(ControllerInputSnapshot input,
-                                BridgePhysicalInput physicalInput)
+                                BridgePhysicalInput physicalInput, uint? pressedButtons = null)
     {
         if (_physicalInput != physicalInput || _usbReportSource != input.Source)
         {
@@ -197,7 +200,7 @@ internal sealed partial class DynamicModulePageRenderer
         var pressed = input.Buttons;
         if (_captureTarget is not null && CanCapture())
         {
-            var newlyPressed = pressed & ~_previousButtons;
+            var newlyPressed = pressedButtons ?? (pressed & ~_previousButtons);
             if (newlyPressed != 0U)
             {
                 var index = System.Numerics.BitOperations.TrailingZeroCount(
@@ -413,8 +416,10 @@ internal sealed partial class DynamicModulePageRenderer
         });
         profileText.Children.Add(new TextBlock
         {
-            Text = definition.MappingProfile == "ns2pro" ? "Switch 2 Pro Controller" : "DualSense",
-            FontSize = 24,
+            Text = definition.MappingOutput is not null
+                ? $"{ProfileLabel(definition.MappingProfile)} → {ProfileLabel(definition.MappingOutput)}"
+                : ProfileLabel(definition.MappingProfile),
+            FontSize = 22,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap
         });
@@ -461,7 +466,7 @@ internal sealed partial class DynamicModulePageRenderer
             SetDraft(ControlIds.ToDictionary(id => id, id => id));
             return Task.CompletedTask;
         });
-        var ns = definition.MappingProfile == "ns2pro";
+        var ns = (definition.MappingOutput ?? definition.MappingProfile) == "ns2pro";
         var swapAb = MappingActionButton(ns ? "交换 A / B" : "交换 × / ○", Symbol.Sync, () =>
         {
             SwapMappingValues("south", "east");
@@ -479,13 +484,12 @@ internal sealed partial class DynamicModulePageRenderer
 
         var options = new[]
         {
-            new BridgeModuleControlOptionDefinition { Value = "none", Label = "不映射" }
+            new MappingSourceOption("none", "不映射", true)
         }.Concat(ControlIds.Select((id, optionIndex) =>
-            new BridgeModuleControlOptionDefinition
-            {
-                Value = id,
-                Label = MappingTargetLabel(definition, optionIndex)
-            })).ToArray();
+            new MappingSourceOption(id, MappingSourceLabel(definition, optionIndex) +
+                (definition.MappingOutput is not null && !IsPhysicalControl(definition.MappingProfile, id)
+                    ? "（此输入手柄无此键）" : ""),
+                definition.MappingOutput is null || IsPhysicalControl(definition.MappingProfile, id)))).ToArray();
         foreach (var targetId in ControlIds)
         {
             var labelIndex = Array.IndexOf(ControlIds, targetId);
@@ -515,11 +519,17 @@ internal sealed partial class DynamicModulePageRenderer
             {
                 Header = "来源按键",
                 ItemsSource = options,
-                DisplayMemberPath = nameof(BridgeModuleControlOptionDefinition.Label),
-                SelectedValuePath = nameof(BridgeModuleControlOptionDefinition.Value),
+                DisplayMemberPath = nameof(MappingSourceOption.Label),
+                SelectedValuePath = nameof(MappingSourceOption.Value),
                 SelectedValue = targetId,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 MinWidth = 0
+            };
+            selector.ItemContainerStyle = new Style(typeof(ComboBoxItem))
+            {
+                Setters = { new Setter(Control.IsEnabledProperty,
+                    new Microsoft.UI.Xaml.Data.Binding
+                    { Path = new PropertyPath(nameof(MappingSourceOption.Available)) }) }
             };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(
                 selector, $"{profile} {MappingTargetLabel(definition, labelIndex)} 来源");
@@ -531,11 +541,15 @@ internal sealed partial class DynamicModulePageRenderer
             };
             _mappingSelectors[targetId] = selector;
         }
-        _mappingDiagram = new ControllerMappingDiagram(definition.MappingProfile,
+        _mappingDiagram = new ControllerMappingDiagram(definition.MappingOutput ?? definition.MappingProfile,
             _mappingSelectors, _captureButtons,
             id => id == "none" ? "不映射"
                 : MappingTargetLabel(definition, Array.IndexOf(ControlIds, id)),
-            CancelCapture);
+            CancelCapture,
+            id => id == "none" ? "不映射"
+                : MappingSourceLabel(definition, Array.IndexOf(ControlIds, id)),
+            definition.MappingProfile,
+            includeCrossIdentityTargets: definition.MappingOutput is null);
         panel.Children.Add(_mappingDiagram);
         RefreshMappingEnabledState();
         return panel;
@@ -633,9 +647,10 @@ internal sealed partial class DynamicModulePageRenderer
         {
             if (version != _mappingVersion) return;
             var legacy = definition.MappingProfile is not null &&
-                ex.Message.Contains("usage: mapping get|set target source", StringComparison.OrdinalIgnoreCase);
+                (ex.Message.Contains("usage: mapping", StringComparison.OrdinalIgnoreCase) ||
+                 ex.Message.Contains("独立映射", StringComparison.Ordinal));
             var message = legacy
-                ? "当前板上固件仅支持旧版共享映射。请在设置向导中更新对应板子的配套固件，再重新读取 PS / NS 独立配置。"
+                ? "板上固件尚未确认“输入手柄 × USB 身份”独立配置。请先更新配套固件；旧版两份映射不会当作四份配置写入。"
                 : ex.Message;
             UpdateMappingStatus(legacy ? "固件需要更新" : "映射尚未读取");
             if (_mappingError is not null)
@@ -664,6 +679,8 @@ internal sealed partial class DynamicModulePageRenderer
             pair => pair.Key, pair => pair.Value.SelectedValue?.ToString() ?? "none");
         var changes = desired.Where(pair => _deviceMapping[pair.Key] != pair.Value).ToArray();
         _mappingBusy = true;
+        IsApplyingMapping = true;
+        MappingWriteStateChanged?.Invoke(true);
         CancelCapture();
         RefreshMappingEnabledState();
         UpdateMappingStatus("正在应用配置");
@@ -703,6 +720,8 @@ internal sealed partial class DynamicModulePageRenderer
         }
         finally
         {
+            IsApplyingMapping = false;
+            MappingWriteStateChanged?.Invoke(false);
             if (version == _mappingVersion)
             {
                 _mappingBusy = false;
@@ -786,6 +805,7 @@ internal sealed partial class DynamicModulePageRenderer
 
     private bool CanCapture() => _mappingLoaded && !_mappingBusy &&
         BridgeButtonMapping.CanCapture(_mappingDefinition?.MappingProfile,
+            _mappingDefinition?.MappingOutput ?? _mappingDefinition?.MappingProfile,
             _physicalInput, _usbReportSource, _deviceMapping);
 
     private void CancelCapture()
@@ -837,7 +857,7 @@ internal sealed partial class DynamicModulePageRenderer
         {
             return "按键";
         }
-        var labels = definition?.MappingProfile switch
+        var labels = (definition?.MappingOutput ?? definition?.MappingProfile) switch
         {
             "ns2pro" => Ns2ProTargetLabels,
             "ds5" => Ds5TargetLabels,
@@ -845,6 +865,20 @@ internal sealed partial class DynamicModulePageRenderer
         };
         return labels[index];
     }
+
+    private static string MappingSourceLabel(BridgeModuleControlDefinition? definition, int index) =>
+        index < 0 || index >= ControlIds.Length ? "按键"
+            : definition?.MappingProfile == "ns2pro" ? Ns2ProTargetLabels[index]
+            : definition?.MappingProfile == "ds5" ? Ds5TargetLabels[index] : ControlLabels[index];
+
+    private static string ProfileLabel(string? profile) =>
+        profile == "ns2pro" ? "Nintendo NS2Pro" : profile == "ds5" ? "DualSense" : "通用手柄";
+
+    private static bool IsPhysicalControl(string? profile, string id) =>
+        profile == "ds5" ? id is not ("capture" or "c")
+            : profile != "ns2pro" || id is not ("touchpad" or "mute" or "left_function" or "right_function");
+
+    private sealed record MappingSourceOption(string Value, string Label, bool Available);
 
     private static bool TrySelect(JsonElement root, string? pointer,
                                   out JsonElement value)

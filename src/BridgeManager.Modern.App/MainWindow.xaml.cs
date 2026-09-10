@@ -44,13 +44,19 @@ public sealed partial class MainWindow
     private bool _reconnecting;
     private bool _autoReconnectEnabled;
     private int _connectionGeneration;
-    private uint _usbInputReports;
+    private long _usbInputReports;
     private DateTimeOffset? _lastUsbInputAt;
     private DeviceDescriptor? _lastDescriptor;
     private BridgeUsbRole _expectedRole = BridgeUsbRole.Unknown;
     private BridgeStatusSnapshot _status = new();
     private SetupWizardWindow? _setupWizardWindow;
     private readonly bool _discoverDevices;
+    private readonly InputReportBuffer _usbFrames = new();
+    private readonly CancellationTokenSource _windowCancellation = new();
+    private int _transportGeneration;
+    private bool _refreshingDevices;
+    private string? _roleControlsKey;
+    private string? _wirelessControlsKey;
 
     public MainWindow(bool discoverDevices = true)
     {
@@ -60,8 +66,11 @@ public sealed partial class MainWindow
             () => _moduleRegistry.GetHidDeviceProfiles());
         _module = _moduleRegistry.Fallback;
         InitializeComponent();
+        foreach (var page in new[] { HomePage, InputPage, FeedbackPage, AdvancedPage, DynamicModulePage })
+            PageScrolling.Attach(page);
         _dynamicPageRenderer = new DynamicModulePageRenderer(
             ExecuteModuleOperationAsync, ShowStatus);
+        _dynamicPageRenderer.MappingWriteStateChanged += MappingWriteStateChanged;
         InitializeIndependentInput();
         AppWindow.Resize(new SizeInt32(1260, 820));
         _pollTimer.Interval = TimeSpan.FromMilliseconds(500);
@@ -89,12 +98,20 @@ public sealed partial class MainWindow
 
     private async void MainWindow_Closed(object sender, WindowEventArgs args)
     {
+        _inputClosing = true;
+        _windowCancellation.Cancel();
+        _pollTimer.Stop();
+        _inputPaintTimer.Stop();
         _setupWizardWindow?.Close();
         _setupWizardWindow = null;
         _connectionGeneration++;
         _autoReconnectEnabled = false;
-        await DisposeIndependentInputAsync();
-        await CloseTransportAsync(clearSummary: false);
+        try
+        {
+            await DisposeIndependentInputAsync();
+            await CloseTransportAsync(clearSummary: false);
+        }
+        catch (Exception ex) { AppDiagnostics.Write("window-close", ex); }
     }
 
     private async void RefreshDevices_Click(object sender, RoutedEventArgs e) => await RefreshDevicesAsync();
@@ -115,7 +132,7 @@ public sealed partial class MainWindow
 
     private async Task<bool> ConnectDescriptorAsync(DeviceDescriptor descriptor, bool reconnecting = false)
     {
-        if (_setupWizardWindow?.IsFlashing == true)
+        if (_inputClosing || _setupWizardWindow?.IsFlashing == true)
         {
             ShowStatus("固件烧录期间暂不建立管理连接。", false);
             return false;
@@ -130,8 +147,14 @@ public sealed partial class MainWindow
         try
         {
             ActivateModule(_moduleRegistry.Resolve(descriptor));
-            _transport = await _transportFactory.OpenAsync(descriptor, CancellationToken.None);
-            await _transport.OpenAsync(CancellationToken.None);
+            var opened = await _transportFactory.OpenAsync(descriptor, _windowCancellation.Token);
+            if (_inputClosing)
+            {
+                await opened.DisposeAsync();
+                return false;
+            }
+            _transport = opened;
+            await _transport.OpenAsync(_windowCancellation.Token);
             if (descriptor.SupportsInputReports &&
                 _transport is IInputReportSource inputSource)
             {
@@ -164,6 +187,7 @@ public sealed partial class MainWindow
         }
         catch (Exception ex)
         {
+            if (_inputClosing) return false;
             SetConnectionAppearance(false, "连接失败");
             ShowStatus(FriendlyError(ex), true);
             AppendLog(ex.ToString());
@@ -469,7 +493,7 @@ public sealed partial class MainWindow
 
     private async void PollTimer_Tick(object? sender, object e)
     {
-        if (_polling || _client is null || _reconnecting) return;
+        if (_inputClosing || _polling || _client is null || _reconnecting) return;
         _polling = true;
         try
         {
@@ -556,12 +580,14 @@ public sealed partial class MainWindow
 
     private async Task RefreshDevicesAsync()
     {
-        if (!_discoverDevices || _setupWizardWindow?.IsFlashing == true) return;
+        if (_inputClosing || _refreshingDevices || !_discoverDevices ||
+            _setupWizardWindow?.IsFlashing == true) return;
+        _refreshingDevices = true;
         try
         {
             var selectedId = (DeviceList.SelectedItem as DeviceDescriptor)?.Id;
-            var devices = await _transportFactory.GetDevicesAsync(CancellationToken.None);
-            if (_setupWizardWindow?.IsFlashing == true) return;
+            var devices = await _transportFactory.GetDevicesAsync(_windowCancellation.Token);
+            if (_inputClosing || _setupWizardWindow?.IsFlashing == true) return;
             DeviceList.ItemsSource = devices;
             var selected = devices.FirstOrDefault(device =>
                 string.Equals(device.Id, selectedId, StringComparison.OrdinalIgnoreCase))
@@ -595,6 +621,7 @@ public sealed partial class MainWindow
             ShowStatus(ex.Message, true);
             AppendLog(ex.ToString());
         }
+        finally { _refreshingDevices = false; }
     }
 
     private async Task<bool> ConnectSelectedDeviceAsync()
@@ -682,8 +709,12 @@ public sealed partial class MainWindow
 
     private async Task<JsonElement> SendCommandAsync(string command, bool render, bool logCommand)
     {
-        if (_client is null) throw new InvalidOperationException("设备未连接。");
-        using var doc = await _client.SendCommandAsync(command, CancellationToken.None);
+        if (_inputClosing || _client is not { } client)
+            throw new InvalidOperationException("设备未连接。");
+        var generation = _transportGeneration;
+        using var doc = await client.SendCommandAsync(command, _windowCancellation.Token);
+        if (_inputClosing || generation != _transportGeneration || !ReferenceEquals(client, _client))
+            throw new OperationCanceledException("管理连接已更换，忽略旧回复。");
         var root = doc.RootElement.Clone();
         UpdateSummary(root);
         if (render)
@@ -712,6 +743,7 @@ public sealed partial class MainWindow
 
     private void UpdateSummary(JsonElement root)
     {
+        if (_inputClosing) return;
         _status = _status.Merge(BridgeStatusSnapshot.Parse(root));
         if (_status.UsbRole != BridgeUsbRole.Unknown)
         {
@@ -788,16 +820,8 @@ public sealed partial class MainWindow
         {
             return;
         }
-        _usbInputReports++;
-        _lastUsbInputAt = DateTimeOffset.UtcNow;
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            if (!ReferenceEquals(sender, _transport)) return;
-            if (!_localInputActive) UpdateInputDisplay(snapshot);
-            _dynamicPageRenderer.OnInputSnapshot(snapshot,
-                _status.InputValid == true && _status.InputStale != true
-                    ? _status.ActiveInput : BridgePhysicalInput.None);
-        });
+        if (_inputClosing || sender is null || !ReferenceEquals(sender, _transport)) return;
+        _usbFrames.Publish(sender, Volatile.Read(ref _transportGeneration), snapshot);
     }
 
     private void Transport_InputReportReadFailed(
@@ -807,7 +831,7 @@ public sealed partial class MainWindow
         DispatcherQueue.TryEnqueue(async () =>
         {
             var previous = _lastDescriptor;
-            if (!ReferenceEquals(sender, _transport) ||
+            if (_inputClosing || !ReferenceEquals(sender, _transport) ||
                 !_autoReconnectEnabled || previous is null) return;
 
             if (!_localInputActive) InputHealthText.Text = "USB Input report 读取失败，正在恢复";
@@ -912,19 +936,22 @@ public sealed partial class MainWindow
         _dynamicPageRenderer.InvalidateConnection();
         _pollTimer.Stop();
         _client = null;
-        if (_transport is not null)
+        Interlocked.Increment(ref _transportGeneration);
+        var previousTransport = _transport;
+        _transport = null;
+        _usbFrames.Reset();
+        if (previousTransport is not null)
         {
-            if (_transport is IInputReportSource inputSource)
+            if (previousTransport is IInputReportSource inputSource)
             {
                 inputSource.InputReportReceived -= Transport_InputReportReceived;
                 inputSource.InputReportReadFailed -= Transport_InputReportReadFailed;
             }
-            await _transport.DisposeAsync();
-            _transport = null;
+            await previousTransport.DisposeAsync();
         }
         _usbInputReports = 0;
         _lastUsbInputAt = null;
-        if (clearSummary)
+        if (clearSummary && !_inputClosing)
         {
             _status = new BridgeStatusSnapshot();
             ConnectionText.Text = "未连接";
@@ -970,8 +997,9 @@ public sealed partial class MainWindow
                     return;
                 }
 
-                await Task.Delay(attempt == 1 ? immediateDelayMs : 500);
-                var devices = await _transportFactory.GetDevicesAsync(CancellationToken.None);
+                await Task.Delay(attempt == 1 ? immediateDelayMs : 500, _windowCancellation.Token);
+                var devices = await _transportFactory.GetDevicesAsync(_windowCancellation.Token);
+                if (_inputClosing || !_autoReconnectEnabled || generation != _connectionGeneration) return;
                 DeviceList.ItemsSource = devices;
                 var target = DeviceReconnectSelector.Select(devices, previous, _expectedRole);
                 if (target is null)
@@ -994,6 +1022,7 @@ public sealed partial class MainWindow
         }
         catch (Exception ex)
         {
+            if (_inputClosing) return;
             ConnectionText.Text = "自动重连失败";
             SetConnectionAppearance(false, "重连失败");
             ShowStatus($"自动重连失败：{ex.Message}", true);
@@ -1144,10 +1173,12 @@ public sealed partial class MainWindow
         if (insertion < 0) insertion = MainNavigation.MenuItems.Count;
         foreach (var page in module.Pages)
         {
+            if (IsMappingPage(page) && _dynamicNavigationItems.Any(item =>
+                Equals(item.Tag, "module:mapping"))) continue;
             var item = new NavigationViewItem
             {
-                Content = page.Label,
-                Tag = $"module:{page.Id}",
+                Content = IsMappingPage(page) ? "按键映射" : page.Label,
+                Tag = IsMappingPage(page) ? "module:mapping" : $"module:{page.Id}",
                 Icon = new FontIcon { Glyph = ModulePageGlyph(page.Icon) }
             };
             MainNavigation.MenuItems.Insert(insertion++, item);
@@ -1157,6 +1188,11 @@ public sealed partial class MainWindow
 
     private async Task RenderDynamicPageAsync(string pageId)
     {
+        if (pageId == "mapping")
+        {
+            await RenderMappingWorkspaceAsync();
+            return;
+        }
         var page = _module.Pages.FirstOrDefault(candidate =>
             candidate.Id.Equals(pageId, StringComparison.OrdinalIgnoreCase));
         if (page is null)
@@ -1169,6 +1205,7 @@ public sealed partial class MainWindow
 
     private (string Title, string Subtitle) DynamicPageTitle(string pageId)
     {
+        if (pageId == "mapping") return ("按键映射", "手柄与 USB 身份的独立配置");
         var page = _module.Pages.FirstOrDefault(candidate =>
             candidate.Id.Equals(pageId, StringComparison.OrdinalIgnoreCase));
         return page is null
@@ -1254,6 +1291,9 @@ public sealed partial class MainWindow
 
     private void UpdateRoleControls(BridgeStatusSnapshot status)
     {
+        var key = $"{_module.Id}:{_module.ModuleVersion}:{status.UsbRole}:{status.InputPreference}";
+        if (_roleControlsKey == key) return;
+        _roleControlsKey = key;
         RoleOptionsList.ItemsSource = _module.UsbRoles.Select(option =>
         {
             var accent = RoleColor(option.Role);
@@ -1284,6 +1324,10 @@ public sealed partial class MainWindow
 
     private void UpdateWirelessControllers()
     {
+        var key = $"{_module.Id}:{_module.ModuleVersion}:{_client is not null}:" +
+                  $"{GetWirelessStatus("ds5")}:{GetWirelessStatus("ns2")}";
+        if (_wirelessControlsKey == key) return;
+        _wirelessControlsKey = key;
         WirelessControllerList.ItemsSource = _module.WirelessControllers
             .Select(option => new WirelessControllerItem(
                 option,
@@ -1375,6 +1419,7 @@ public sealed partial class MainWindow
 
     private void AppendLog(string message)
     {
+        if (_inputClosing) return;
         var line = $"[{DateTimeOffset.Now:HH:mm:ss}] {message}";
         LogBox.Text = string.IsNullOrEmpty(LogBox.Text) ? line : $"{LogBox.Text}\r\n{line}";
         if (LogBox.Text.Length > 24000) LogBox.Text = LogBox.Text[^16000..];
@@ -1382,6 +1427,7 @@ public sealed partial class MainWindow
 
     private void ShowStatus(string message, bool error)
     {
+        if (_inputClosing) return;
         StatusBar.Severity = error ? Microsoft.UI.Xaml.Controls.InfoBarSeverity.Error : Microsoft.UI.Xaml.Controls.InfoBarSeverity.Informational;
         StatusBar.Message = message;
     }

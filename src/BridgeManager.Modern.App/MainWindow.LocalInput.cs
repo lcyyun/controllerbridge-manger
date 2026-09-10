@@ -9,9 +9,8 @@ public sealed partial class MainWindow
 {
     private readonly LocalControllerService _localControllers = new();
     private readonly SemaphoreSlim _inputSwitchLock = new(1, 1);
-    private readonly object _localInputLock = new();
-    private (int Version, ControllerInputSnapshot Input)? _pendingLocalInput;
-    private bool _localInputDispatchQueued;
+    private readonly InputReportBuffer _localFrames = new();
+    private readonly DispatcherTimer _inputPaintTimer = new() { Interval = TimeSpan.FromMilliseconds(33) };
     private readonly DispatcherTimer _inputWatchdog = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer _localRumbleTimer = new() { Interval = TimeSpan.FromMilliseconds(600) };
     private bool _selectingInput;
@@ -32,6 +31,8 @@ public sealed partial class MainWindow
 
     private void InitializeIndependentInput()
     {
+        _inputPaintTimer.Tick += (_, _) => PaintPendingInput();
+        _inputPaintTimer.Start();
         _localControllers.InputReceived += LocalInputReceived;
         _localControllers.ReadFailed += LocalInputFailed;
         _inputWatchdog.Tick += (_, _) =>
@@ -72,7 +73,7 @@ public sealed partial class MainWindow
         var selectionVersion = _inputSelectionVersion;
         try
         {
-            var devices = await _localControllers.GetDevicesAsync(CancellationToken.None);
+            var devices = await _localControllers.GetDevicesAsync(_windowCancellation.Token);
             if (_inputClosing || selectionVersion != _inputSelectionVersion) return;
             var choices = new[] { new InputSourceChoice("接收器 USB 输入") }
                 .Concat(devices.Select(device => new InputSourceChoice(device.DisplayName, device))).ToArray();
@@ -84,6 +85,7 @@ public sealed partial class MainWindow
             if (old is not null && selected is null)
             {
                 await SwitchInputSourceAsync(null);
+                if (_inputClosing) return;
                 ClearInputTest("所选本机手柄已断开");
             }
             else if (!_localInputActive)
@@ -93,6 +95,7 @@ public sealed partial class MainWindow
         }
         catch (Exception ex)
         {
+            if (_inputClosing) return;
             InputSourceDetailText.Text = $"手柄枚举失败：{ex.Message}";
         }
         finally
@@ -140,13 +143,14 @@ public sealed partial class MainWindow
             _localInputActive = true;
             ClearInputTest("正在连接本机手柄");
             InputSourceDetailText.Text = device.TransportLabel;
-            await _localControllers.StartAsync(device, CancellationToken.None);
+            await _localControllers.StartAsync(device, _windowCancellation.Token);
             if (version != _inputSelectionVersion || _inputClosing) return;
             LocalRumbleButton.IsEnabled = device.SupportsRumble;
             LocalRumbleStopButton.IsEnabled = device.SupportsRumble;
         }
         catch (Exception ex)
         {
+            if (_inputClosing || version != _inputSelectionVersion) return;
             _localInputActive = false;
             _selectedLocalDevice = null;
             ClearInputTest($"手柄读取失败：{ex.Message}");
@@ -156,34 +160,33 @@ public sealed partial class MainWindow
 
     private void LocalInputReceived(object? sender, ControllerInputSnapshot input)
     {
+        if (_inputClosing) return;
         var version = Volatile.Read(ref _inputSelectionVersion);
         Interlocked.Increment(ref _localSamples);
-        lock (_localInputLock)
+        _localFrames.Publish(_localControllers, version, input);
+    }
+
+    private void PaintPendingInput()
+    {
+        if (_inputClosing) return;
+        if (_usbFrames.Drain() is { } usb &&
+            usb.Generation == _transportGeneration && ReferenceEquals(usb.Source, _transport))
         {
-            _pendingLocalInput = (version, input);
-            if (_localInputDispatchQueued) return;
-            _localInputDispatchQueued = true;
+            _usbInputReports = usb.ReportCount;
+            _lastUsbInputAt = usb.ReceivedAt;
+            if (!_localInputActive && InputPage.Visibility == Visibility.Visible)
+                UpdateInputDisplay(usb.Input);
+            _dynamicPageRenderer.OnInputSnapshot(usb.Input,
+                _status.InputValid == true && _status.InputStale != true
+                    ? _status.ActiveInput : BridgePhysicalInput.None, usb.PressedButtons);
         }
-        // Drain every HID report, but only paint the newest state when the UI is busy.
-        if (DispatcherQueue.TryEnqueue(() =>
+        if (_localFrames.Drain() is { } current &&
+            _localInputActive && current.Generation == _inputSelectionVersion)
         {
-            (int Version, ControllerInputSnapshot Input)? pending;
-            lock (_localInputLock)
-            {
-                pending = _pendingLocalInput;
-                _pendingLocalInput = null;
-                _localInputDispatchQueued = false;
-            }
-            if (pending is not { } current || !_localInputActive || _inputClosing ||
-                current.Version != _inputSelectionVersion) return;
-            _lastLocalInput = DateTimeOffset.UtcNow;
+            _lastLocalInput = current.ReceivedAt;
             _localReadError = null;
-            UpdateInputDisplay(current.Input, local: true);
-        })) return;
-        lock (_localInputLock)
-        {
-            _pendingLocalInput = null;
-            _localInputDispatchQueued = false;
+            if (InputPage.Visibility == Visibility.Visible)
+                UpdateInputDisplay(current.Input, local: true);
         }
     }
 
@@ -203,11 +206,13 @@ public sealed partial class MainWindow
 
     private async void LocalRumble_Click(object sender, RoutedEventArgs e)
     {
-        if (!_localInputActive || _selectedLocalDevice?.SupportsRumble != true) return;
+        if (_inputClosing || !_localInputActive || _selectedLocalDevice?.SupportsRumble != true) return;
+        var version = _inputSelectionVersion;
         try
         {
-            if (await _localControllers.SetRumbleAsync(0.35, 0.35, CancellationToken.None))
+            if (await _localControllers.SetRumbleAsync(0.35, 0.35, _windowCancellation.Token))
             {
+                if (_inputClosing || version != _inputSelectionVersion) return;
                 _localRumbleTimer.Stop();
                 _localRumbleTimer.Start();
             }
@@ -285,6 +290,9 @@ public sealed partial class MainWindow
         _inputClosing = true;
         _inputSelectionVersion++;
         _inputWatchdog.Stop();
+        _inputPaintTimer.Stop();
+        _localFrames.Reset();
+        _usbFrames.Reset();
         await StopLocalRumbleAsync();
         await _inputSwitchLock.WaitAsync();
         try

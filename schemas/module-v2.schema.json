@@ -138,6 +138,7 @@
         "resetAction": { "$ref": "#/$defs/id" },
         "saveAction": { "$ref": "#/$defs/id" },
         "mappingProfile": { "enum": ["ds5", "ns2pro"] },
+        "mappingOutput": { "enum": ["ds5", "ns2pro"] },
         "sourceCatalog": { "$ref": "#/$defs/id" },
         "targetCatalog": { "$ref": "#/$defs/id" },
         "visibleWhen": { "$ref": "#/$defs/condition" }
@@ -155,8 +156,17 @@
             ]
           },
           "else": {
-            "not": { "required": ["mappingProfile"] }
+            "not": {
+              "anyOf": [
+                { "required": ["mappingProfile"] },
+                { "required": ["mappingOutput"] }
+              ]
+            }
           }
+        },
+        {
+          "if": { "required": ["mappingOutput"] },
+          "then": { "required": ["mappingProfile"] }
         },
         {
           "if": {

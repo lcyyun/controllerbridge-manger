@@ -104,6 +104,10 @@
                 <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
                 <Setter Property="HorizontalScrollMode" Value="Disabled" />
                 <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="VerticalScrollMode" Value="Enabled" />
+                <Setter Property="ZoomMode" Value="Disabled" />
+                <Setter Property="IsVerticalScrollChainingEnabled" Value="True" />
+                <Setter Property="IsTabStop" Value="False" />
                 <Setter Property="Padding" Value="0,0,12,28" />
             </Style>
             <Style x:Key="BridgeSectionExpanderStyle" TargetType="Expander">

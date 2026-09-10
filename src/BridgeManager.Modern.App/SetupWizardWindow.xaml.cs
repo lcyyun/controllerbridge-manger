@@ -63,6 +63,7 @@ public sealed partial class SetupWizardWindow
         _prepareFlashAsync = prepareFlashAsync ?? (() => Task.CompletedTask);
         _discoverDevices = discoverDevices;
         InitializeComponent();
+        PageScrolling.Attach(WizardScroller);
         AppWindow.Resize(new SizeInt32(1040, 760));
         InitializeWizard();
         AppWindow.Closing += (_, args) =>

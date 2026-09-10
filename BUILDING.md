@@ -46,6 +46,23 @@ Firmware builds and new module packages are produced in the respective
 firmware repositories using `module/package.ps1`. Do not rename an old image
 to match a new release. Update the lock after validating the new build.
 
+For an unvalidated local SF32 build, keep the baseline lock and published
+package intact. The archive's manifest must match the checked-in manager
+manifest. Use a separate output name:
+
+```powershell
+pwsh -File tools\package-modern-windows.ps1 -Offline `
+  -PackageName BridgeManager-mapping-preview-win-x64 `
+  -LocalSf32Module C:\builds\sf32-unified-0.6.0-dev.cbmodule
+pwsh -File tools\verify-modern-package.ps1 `
+  -PackagePath dist\BridgeManager-mapping-preview-win-x64 -AllowLocalPreview
+```
+
+`LOCAL-PREVIEW.json` records the local override's size and digest, explicitly
+marks hardware testing as incomplete, and does not claim a published source
+commit. Verification rejects local previews without `-AllowLocalPreview`.
+The unchanged ESP32 and Pico archives must still match the release lock.
+
 ## Classic Diagnostics
 
 Classic output is optional; the default package does not require old local
@@ -69,4 +86,6 @@ pwsh -File tools\verify-modern-package.ps1 -PackagePath dist\BridgeManager-moder
 `BridgeManager.Modern.App.exe --shell-smoke <absolute-output-directory>` and
 `--mapping-smoke <absolute-output-directory>` are isolated in-app UI tests.
 They use labeled offline fixtures and must not flash or open a real device.
+Adding `--keep-open` to `--shell-smoke` keeps a successful offline test window
+open for mouse-wheel and window-resize checks; close it after inspection.
 The separate `--launch-smoke` mode performs discovery and is not used by CI.

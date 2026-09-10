@@ -18,6 +18,8 @@ internal sealed class ControllerMappingDiagram : StackPanel
     private readonly IReadOnlyDictionary<string, ComboBox> _selectors;
     private readonly IReadOnlyDictionary<string, Button> _captureButtons;
     private readonly Func<string, string> _label;
+    private readonly Func<string, string> _sourceLabel;
+    private readonly string? _sourceProfile;
     private readonly Action _cancelCapture;
     private readonly Brush _accent;
     private readonly Canvas _stage = new() { Height = 418 };
@@ -47,17 +49,22 @@ internal sealed class ControllerMappingDiagram : StackPanel
         _callouts.ToDictionary(pair => pair.Key, pair => pair.Value.Button);
     internal FrameworkElement? EditorContent => _editor?.Content as FrameworkElement;
     internal bool IsCompact => _layoutWidth < 760;
+    internal int GroupCount => _definitions.Length;
     internal string Summary => _changes.Header?.ToString() ?? "";
 
     public ControllerMappingDiagram(string? profile,
         IReadOnlyDictionary<string, ComboBox> selectors,
         IReadOnlyDictionary<string, Button> captureButtons,
-        Func<string, string> label, Action cancelCapture)
+        Func<string, string> label, Action cancelCapture,
+        Func<string, string>? sourceLabel = null, string? sourceProfile = null,
+        bool includeCrossIdentityTargets = true)
     {
         _profile = profile;
         _selectors = selectors;
         _captureButtons = captureButtons;
         _label = label;
+        _sourceLabel = sourceLabel ?? label;
+        _sourceProfile = sourceProfile ?? profile;
         _cancelCapture = cancelCapture;
         _accent = Resource(profile == "ns2pro" ? "NintendoBrush" : "SonyBrush");
         Spacing = 16;
@@ -78,7 +85,7 @@ internal sealed class ControllerMappingDiagram : StackPanel
             new MappingGroup("跨身份输出", ns
                 ? new[] { "touchpad", "mute", "left_function", "right_function" }
                 : new[] { "capture", "c" }, Extra: true)
-        };
+        }.Where(group => includeCrossIdentityTargets || !group.Extra).ToArray();
 
         var divider = new Rectangle { Height = 1, Fill = Resource("DividerStrokeColorDefaultBrush") };
         Children.Add(divider);
@@ -147,7 +154,7 @@ internal sealed class ControllerMappingDiagram : StackPanel
             DispatcherQueue.TryEnqueue(() =>
             {
                 _layoutPending = false;
-                LayoutDiagram();
+                if (IsLoaded) LayoutDiagram();
             });
         };
         Unloaded += (_, _) => CloseEditor();
@@ -174,16 +181,16 @@ internal sealed class ControllerMappingDiagram : StackPanel
             var source = Source(target);
             var custom = loaded && target != source;
             var pending = loaded && device.TryGetValue(target, out var saved) && saved != source;
-            callout.Value.Text = loaded ? _label(source) : "尚未读取";
+            callout.Value.Text = loaded ? _sourceLabel(source) : "尚未读取";
             callout.Value.Foreground = custom ? _accent : Resource("TextFillColorPrimaryBrush");
             callout.Button.IsEnabled = loaded && !busy;
             callout.Dot.Visibility = pending ? Visibility.Visible : Visibility.Collapsed;
             callout.Button.BorderBrush = custom ? _accent : Resource("CardStrokeColorDefaultBrush");
             ToolTipService.SetToolTip(callout.Button, loaded
-                ? $"{_label(target)} ← {_label(source)}{(pending ? " · 未应用" : "")}"
+                ? $"{_label(target)} ← {_sourceLabel(source)}{(pending ? " · 未应用" : "")}"
                 : "等待从设备读取映射");
             AutomationProperties.SetName(callout.Button,
-                $"{_label(target)} 的来源：{(loaded ? _label(source) : "尚未读取")}，更换映射");
+                $"{_label(target)} 的来源：{(loaded ? _sourceLabel(source) : "尚未读取")}，更换映射");
             if (_pins.TryGetValue(target, out var pin))
                 pin.IsEnabled = loaded && !busy;
         }
@@ -193,7 +200,9 @@ internal sealed class ControllerMappingDiagram : StackPanel
 
     internal void OpenEditor(string target, FrameworkElement? placement = null)
     {
-        if (!_loaded || _busy || !_selectors.ContainsKey(target)) return;
+        if (!_loaded || _busy || XamlRoot is null ||
+            !_selectors.TryGetValue(target, out var selector) ||
+            !_captureButtons.TryGetValue(target, out var captureButton)) return;
         CloseEditor();
         _selectedTarget = target;
         RefreshLineColors();
@@ -212,7 +221,7 @@ internal sealed class ControllerMappingDiagram : StackPanel
             TextWrapping = TextWrapping.Wrap
         });
         content.Children.Add(heading);
-        content.Children.Add(_selectors[target]);
+        content.Children.Add(selector);
         var shortcuts = new Grid { ColumnSpacing = 6, RowSpacing = 6 };
         for (var column = 0; column < 4; column++)
             shortcuts.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -229,11 +238,11 @@ internal sealed class ControllerMappingDiagram : StackPanel
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 Padding = new Thickness(4)
             };
-            ToolTipService.SetToolTip(button, _label(source));
-            AutomationProperties.SetName(button, $"来源设为 {_label(source)}");
+            ToolTipService.SetToolTip(button, _sourceLabel(source));
+            AutomationProperties.SetName(button, $"来源设为 {_sourceLabel(source)}");
             button.Click += (_, _) =>
             {
-                if (_loaded && !_busy) _selectors[target].SelectedValue = source;
+                if (_loaded && !_busy) selector.SelectedValue = source;
                 CloseEditor();
             };
             Grid.SetRow(button, index / 4);
@@ -255,7 +264,7 @@ internal sealed class ControllerMappingDiagram : StackPanel
         };
         defaults.Click += (_, _) =>
         {
-            if (_loaded && !_busy) _selectors[target].SelectedValue = target;
+            if (_loaded && !_busy) selector.SelectedValue = target;
             CloseEditor();
         };
         actions.Children.Add(defaults);
@@ -264,13 +273,13 @@ internal sealed class ControllerMappingDiagram : StackPanel
         AutomationProperties.SetName(disable, "不映射此目标键");
         disable.Click += (_, _) =>
         {
-            if (_loaded && !_busy) _selectors[target].SelectedValue = "none";
+            if (_loaded && !_busy) selector.SelectedValue = "none";
             CloseEditor();
         };
         Grid.SetColumn(disable, 1);
         actions.Children.Add(disable);
-        Grid.SetColumn(_captureButtons[target], 2);
-        actions.Children.Add(_captureButtons[target]);
+        Grid.SetColumn(captureButton, 2);
+        actions.Children.Add(captureButton);
         content.Children.Add(actions);
         var owner = placement ?? (FrameworkElement?)_callouts.GetValueOrDefault(target)?.Button ?? this;
         var flyout = new Flyout
@@ -281,8 +290,8 @@ internal sealed class ControllerMappingDiagram : StackPanel
         flyout.Closed += (_, _) =>
         {
             // Reused controls must be detached before the next editor can open.
-            content.Children.Remove(_selectors[target]);
-            actions.Children.Remove(_captureButtons[target]);
+            content.Children.Remove(selector);
+            actions.Children.Remove(captureButton);
             if (ReferenceEquals(_editor, flyout))
             {
                 _editor = null;
@@ -533,7 +542,7 @@ internal sealed class ControllerMappingDiagram : StackPanel
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.Children.Add(new TextBlock
             {
-                Text = $"{_label(target)}  ←  {_label(Source(target))}",
+                Text = $"{_label(target)}  ←  {_sourceLabel(Source(target))}",
                 TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center
             });
             var status = new TextBlock
@@ -599,11 +608,11 @@ internal sealed class ControllerMappingDiagram : StackPanel
 
     private string Token(string target) => target switch
     {
-        "south" => _profile == "ns2pro" ? "B" : "×",
-        "east" => _profile == "ns2pro" ? "A" : "○",
-        "west" => _profile == "ns2pro" ? "Y" : "□",
-        "north" => _profile == "ns2pro" ? "X" : "△",
-        _ => _label(target)
+        "south" => _sourceProfile == "ns2pro" ? "B" : "×",
+        "east" => _sourceProfile == "ns2pro" ? "A" : "○",
+        "west" => _sourceProfile == "ns2pro" ? "Y" : "□",
+        "north" => _sourceProfile == "ns2pro" ? "X" : "△",
+        _ => _sourceLabel(target)
     };
 
     private Brush Resource(string key)

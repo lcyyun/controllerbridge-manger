@@ -13,6 +13,9 @@ public sealed class WindowsHidTransportFactory : IDeviceTransportFactory
     }
 
     public Task<IReadOnlyList<DeviceDescriptor>> GetDevicesAsync(CancellationToken cancellationToken)
+        => Task.Run(() => GetDevices(cancellationToken), cancellationToken);
+
+    private IReadOnlyList<DeviceDescriptor> GetDevices(CancellationToken cancellationToken)
     {
         var descriptors = new List<DeviceDescriptor>();
         foreach (var profile in _profiles())
@@ -46,11 +49,15 @@ public sealed class WindowsHidTransportFactory : IDeviceTransportFactory
             .Select(group => group.First())
             .OrderBy(item => item.DisplayName, StringComparer.CurrentCultureIgnoreCase)
             .ToArray();
-        return Task.FromResult(result);
+        return result;
     }
 
     public Task<IDeviceTransport> OpenAsync(DeviceDescriptor descriptor,
                                              CancellationToken cancellationToken)
+        => Task.Run(() => Open(descriptor, cancellationToken), cancellationToken);
+
+    private static IDeviceTransport Open(DeviceDescriptor descriptor,
+                                          CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var device = DeviceList.Local
@@ -64,8 +71,12 @@ public sealed class WindowsHidTransportFactory : IDeviceTransportFactory
                 "Unable to open HID device. Close other controller tools and reconnect the adapter.");
         }
 
-        return Task.FromResult<IDeviceTransport>(
-            new WindowsHidTransport(descriptor, device, stream));
+        if (cancellationToken.IsCancellationRequested)
+        {
+            stream.Dispose();
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        return new WindowsHidTransport(descriptor, device, stream);
     }
 
     private static IEnumerable<HidDevice> FindDevices(BridgeDeviceProfile profile)

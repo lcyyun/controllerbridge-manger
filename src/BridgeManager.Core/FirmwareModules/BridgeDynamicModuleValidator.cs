@@ -184,6 +184,11 @@ internal static class BridgeDynamicModuleValidator
             {
                 Invalid($"MappingEditor '{control.Id}' mappingProfile must be 'ds5' or 'ns2pro'.");
             }
+            if (control.MappingOutput is not null &&
+                control.MappingOutput is not ("ds5" or "ns2pro"))
+            {
+                Invalid($"MappingEditor '{control.Id}' mappingOutput must be 'ds5' or 'ns2pro'.");
+            }
             RequireId(control.SourceCatalog,
                 $"MappingEditor '{control.Id}' sourceCatalog");
             RequireId(control.TargetCatalog,
@@ -192,15 +197,45 @@ internal static class BridgeDynamicModuleValidator
             RequireAction(control.Id, "applyAction", control.ApplyAction, operations);
             RequireAction(control.Id, "resetAction", control.ResetAction, operations);
             RequireAction(control.Id, "saveAction", control.SaveAction, operations);
+            ValidateMappingPair(control, operations);
         }
         else if (!string.IsNullOrWhiteSpace(control.SourceCatalog) ||
                  !string.IsNullOrWhiteSpace(control.TargetCatalog) ||
                  control.MappingProfile is not null ||
+                 control.MappingOutput is not null ||
                  !string.IsNullOrWhiteSpace(control.ResetAction) ||
                  !string.IsNullOrWhiteSpace(control.SaveAction))
         {
             Invalid($"Control '{control.Id}' uses MappingEditor-only properties.");
         }
+    }
+
+    private static void ValidateMappingPair(BridgeModuleControlDefinition control,
+        IReadOnlyDictionary<string, BridgeModuleOperationDefinition> operations)
+    {
+        var actions = new[] { control.ReadAction!, control.ApplyAction!,
+            control.ResetAction!, control.SaveAction! };
+        var usesOutput = actions.Any(id => operations[id].Request.Contains(
+            "{output}", StringComparison.Ordinal));
+        if (control.MappingOutput is null)
+        {
+            if (usesOutput)
+                Invalid($"MappingEditor '{control.Id}' requires mappingOutput for source/output pair operations.");
+            return;
+        }
+        if (control.MappingProfile is null)
+            Invalid($"MappingEditor '{control.Id}' requires mappingProfile with mappingOutput.");
+        foreach (var id in actions)
+        {
+            var request = operations[id].Request;
+            if (!request.Contains("{profile}", StringComparison.Ordinal) ||
+                !request.Contains("{output}", StringComparison.Ordinal))
+                Invalid($"MappingEditor '{control.Id}' pair operation '{id}' requires {{profile}} and {{output}}.");
+        }
+        var apply = operations[control.ApplyAction!].Request;
+        if (!apply.Contains("{target}", StringComparison.Ordinal) ||
+            !apply.Contains("{source}", StringComparison.Ordinal))
+            Invalid($"MappingEditor '{control.Id}' pair applyAction requires {{target}} and {{source}}.");
     }
 
     private static void ValidateNumericFields(BridgeModuleControlDefinition control)
