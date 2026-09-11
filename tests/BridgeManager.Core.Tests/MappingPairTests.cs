@@ -6,13 +6,14 @@ using BridgeManager.Core.FirmwareModules;
 internal static class MappingPairTests
 {
     private static readonly string[] Profiles = ["ds5", "ns2pro"];
+    private static readonly string[] Outputs = ["ds5", "ns2pro", "xbox"];
     private static readonly (string Action, string Verb)[] Actions =
         [("readAction", "get"), ("applyAction", "set"), ("resetAction", "reset"), ("saveAction", "save")];
 
     public static void Templates()
     {
         foreach (var profile in Profiles)
-        foreach (var output in Profiles)
+        foreach (var output in Outputs)
         {
             var control = Control(profile, output);
             var parameters = BridgeButtonMapping.Parameters(control, "south", "east");
@@ -45,7 +46,7 @@ internal static class MappingPairTests
     public static void Replies()
     {
         foreach (var profile in Profiles)
-        foreach (var output in Profiles)
+        foreach (var output in Outputs)
         {
             var control = Control(profile, output);
             var reply = Reply(profile, output);
@@ -60,7 +61,7 @@ internal static class MappingPairTests
                 Reject(() => Read(control, missing));
                 var invalidValues = field == "mapping_schema"
                     ? new JsonNode?[] { null, JsonValue.Create("3"), JsonValue.Create(2),
-                        JsonValue.Create(4), JsonValue.Create(3.5), JsonValue.Create(true),
+                        JsonValue.Create(3), JsonValue.Create(4.5), JsonValue.Create(true),
                         JsonValue.Create(long.MaxValue), new JsonObject(), new JsonArray() }
                     : new JsonNode?[] { null, JsonValue.Create(3), JsonValue.Create(true),
                         JsonValue.Create("unknown"), JsonValue.Create("DS5"),
@@ -73,12 +74,12 @@ internal static class MappingPairTests
                     Reject(() => Read(control, wrong));
                 }
             }
-            var schemaFloat = reply.ToJsonString().Replace("\"mapping_schema\":3", "\"mapping_schema\":3.0");
+            var schemaFloat = reply.ToJsonString().Replace("\"mapping_schema\":4", "\"mapping_schema\":4.0");
             Reject(() => BridgeButtonMapping.ReadReply(control, Element(schemaFloat)));
             var legacy = Reply(profile, output);
             legacy.Remove("output");
             legacy.Remove("mapping_schema");
-            Reject(() => Read(control, legacy), "mapping_schema 3");
+            Reject(() => Read(control, legacy), "mapping_schema 4");
             var rejected = Reply(profile, output);
             rejected["ok"] = false;
             Reject(() => Read(control, rejected));
@@ -142,7 +143,7 @@ internal static class MappingPairTests
     {
         var identity = BridgeButtonMapping.ControlIds.ToDictionary(id => id, id => id);
         foreach (var profile in Profiles)
-        foreach (var output in Profiles)
+        foreach (var output in Outputs)
         foreach (var input in new[] { BridgePhysicalInput.Unknown, BridgePhysicalInput.DualSense,
                      BridgePhysicalInput.NintendoNs2Pro })
         foreach (var report in new[] { "DS5 USB input", "NS2 USB input", "Xbox USB input", "" })
@@ -179,7 +180,7 @@ internal static class MappingPairTests
     public static void Validation()
     {
         foreach (var profile in Profiles)
-        foreach (var output in Profiles)
+        foreach (var output in Outputs)
         {
             var fixture = PairManifest(profile, output);
             var loaded = Load(fixture);
@@ -192,7 +193,7 @@ internal static class MappingPairTests
                 Mapping(missing).Remove(property);
                 Reject(() => Load(missing), property);
                 var invalid = fixture.DeepClone().AsObject();
-                Mapping(invalid)[property] = "xbox";
+                Mapping(invalid)[property] = "unknown";
                 Reject(() => Load(invalid), property);
                 Mapping(invalid)[property] = "";
                 Reject(() => Load(invalid), property);
@@ -239,12 +240,13 @@ internal static class MappingPairTests
         var root = FindRepository();
         var path = Path.Combine(root, "modules", "sf32-unified", "sf32-unified.bridge-module.json");
         var module = BridgeModulePackageLoader.LoadFile(path);
-        Equal("0.6.0-dev", module.ModuleVersion);
-        Equal("0.6.0-dev", module.Firmware.Single().Version);
+        Equal("0.7.0-dev", module.ModuleVersion);
+        Equal("0.7.0-dev", module.Firmware.Single().Version);
         var pages = module.Pages.Where(page => page.Sections.SelectMany(section => section.Controls)
             .Any(control => control.Type == BridgeModuleControlType.MappingEditor)).ToArray();
         var expected = new[] { ("ps-mapping", "ds5", "ds5"), ("ps-ns-mapping", "ds5", "ns2pro"),
-            ("ns-ps-mapping", "ns2pro", "ds5"), ("ns-mapping", "ns2pro", "ns2pro") };
+            ("ns-ps-mapping", "ns2pro", "ds5"), ("ps-xbox-mapping", "ds5", "xbox"),
+            ("ns-xbox-mapping", "ns2pro", "xbox"), ("ns-mapping", "ns2pro", "ns2pro") };
         Equal(expected.Length, pages.Length);
         for (var i = 0; i < expected.Length; i++)
         {
@@ -272,7 +274,7 @@ internal static class MappingPairTests
         var schemaPath = Path.Combine(root, "schemas", "module-v2.schema.json");
         using var schema = JsonDocument.Parse(File.ReadAllText(schemaPath));
         var definition = schema.RootElement.GetProperty("$defs").GetProperty("control");
-        Equal("ds5,ns2pro", string.Join(',', definition.GetProperty("properties")
+        Equal("ds5,ns2pro,xbox", string.Join(',', definition.GetProperty("properties")
             .GetProperty("mappingOutput").GetProperty("enum").EnumerateArray().Select(item => item.GetString())));
         var rules = definition.GetProperty("allOf").EnumerateArray().ToArray();
         var outputRule = rules.Single(rule => rule.GetProperty("if").GetProperty("required")

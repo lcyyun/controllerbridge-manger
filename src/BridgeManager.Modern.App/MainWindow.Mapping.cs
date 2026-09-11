@@ -38,7 +38,7 @@ public sealed partial class MainWindow
         };
         _mappingOutputChoice = new ComboBox
         {
-            Header = "USB 输出身份", ItemsSource = choices,
+            Header = "USB 输出身份", ItemsSource = choices.Append(new MappingChoice("xbox", "Xbox 360")).ToArray(),
             DisplayMemberPath = nameof(MappingChoice.Label), SelectedValuePath = nameof(MappingChoice.Id),
             SelectedValue = _mappingOutput, HorizontalAlignment = HorizontalAlignment.Stretch
         };

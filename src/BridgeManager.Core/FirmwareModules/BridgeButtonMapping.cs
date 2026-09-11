@@ -4,7 +4,7 @@ namespace BridgeManager.Core.FirmwareModules;
 
 public static class BridgeButtonMapping
 {
-    public const int PairMappingSchema = 3;
+    public const int PairMappingSchema = 4;
 
     public static IReadOnlyList<string> ControlIds { get; } = Array.AsReadOnly(
         new[]
@@ -47,7 +47,7 @@ public static class BridgeButtonMapping
         }
         if (definition.MappingOutput is { } output &&
             (definition.MappingProfile is not ("ds5" or "ns2pro") ||
-             output is not ("ds5" or "ns2pro") ||
+             output is not ("ds5" or "ns2pro" or "xbox") ||
              reply.ValueKind != JsonValueKind.Object ||
              !reply.TryGetProperty("output", out var returnedOutput) ||
              returnedOutput.ValueKind != JsonValueKind.String ||
@@ -58,8 +58,8 @@ public static class BridgeButtonMapping
              schemaVersion != PairMappingSchema))
         {
             throw new InvalidDataException(
-                $"设备未确认 {definition.MappingProfile} → {output} 独立映射（mapping_schema 3），" +
-                "请更新支持四组映射的固件后重新读取。");
+                $"设备未确认 {definition.MappingProfile} → {output} 独立映射（mapping_schema 4），" +
+                "请更新支持六组映射的固件后重新读取。");
         }
         if (reply.ValueKind == JsonValueKind.Object &&
             reply.TryGetProperty("ok", out var ok) && ok.ValueKind == JsonValueKind.False)

@@ -91,7 +91,13 @@ internal sealed class ControllerMappingDiagram : StackPanel
             new MappingGroup("跨身份输出", ns
                 ? new[] { "touchpad", "mute", "left_function", "right_function" }
                 : new[] { "capture", "c" }, Extra: true)
-        }.Where(group => includeCrossIdentityTargets || !group.Extra).ToArray();
+        }.Where(group => includeCrossIdentityTargets || !group.Extra)
+            .Select(group => profile == "xbox" ? group with
+            {
+                Targets = group.Targets.Where(id => BridgeButtonMapping.ControlIds
+                    .Take(17).Contains(id)).ToArray()
+            } : group)
+            .Where(group => group.Targets.Length > 0).ToArray();
 
         var divider = new Rectangle { Height = 1, Fill = Resource("DividerStrokeColorDefaultBrush") };
         Children.Add(divider);
@@ -358,7 +364,7 @@ internal sealed class ControllerMappingDiagram : StackPanel
         _compactGroup.Visibility = width < 560 ? Visibility.Visible : Visibility.Collapsed;
         _viewCaption.Text = group.Extra ? "跨身份扩展"
             : group.Rear ? (_profile == "ns2pro" ? "背面 · GL / GR" : "背面 · DualSense Edge")
-            : _group == 1 && _profile != "ns2pro" ? "正面 · Fn 仅 DualSense Edge" : "正面";
+            : _group == 1 && _profile == "ds5" ? "正面 · Fn 仅 DualSense Edge" : "正面";
         _compactLabels.Visibility = IsCompact || group.Extra ? Visibility.Visible : Visibility.Collapsed;
         _stage.Visibility = group.Extra ? Visibility.Collapsed : Visibility.Visible;
         if (group.Extra)

@@ -185,9 +185,9 @@ internal static class BridgeDynamicModuleValidator
                 Invalid($"MappingEditor '{control.Id}' mappingProfile must be 'ds5' or 'ns2pro'.");
             }
             if (control.MappingOutput is not null &&
-                control.MappingOutput is not ("ds5" or "ns2pro"))
+                control.MappingOutput is not ("ds5" or "ns2pro" or "xbox"))
             {
-                Invalid($"MappingEditor '{control.Id}' mappingOutput must be 'ds5' or 'ns2pro'.");
+                Invalid($"MappingEditor '{control.Id}' mappingOutput must be 'ds5', 'ns2pro' or 'xbox'.");
             }
             RequireId(control.SourceCatalog,
                 $"MappingEditor '{control.Id}' sourceCatalog");

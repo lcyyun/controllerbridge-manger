@@ -23,7 +23,7 @@ internal sealed partial class DynamicModulePageRenderer
         var nsPage = module.Pages.Single(page => page.Id == "ns-mapping");
         var ps = psPage.Sections.Single().Controls.Single();
         var ns = nsPage.Sections.Single().Controls.Single();
-        var configurations = new[] { "ds5/ds5", "ds5/ns2pro", "ns2pro/ds5", "ns2pro/ns2pro" }
+        var configurations = new[] { "ds5/ds5", "ds5/ns2pro", "ns2pro/ds5", "ns2pro/ns2pro", "ds5/xbox", "ns2pro/xbox" }
             .ToDictionary(route => route, _ => ControlIds.ToDictionary(id => id, id => id));
         var commands = new List<string>();
         var statuses = new List<string>();
@@ -33,7 +33,7 @@ internal sealed partial class DynamicModulePageRenderer
         TaskCompletionSource<JsonElement>? pendingRead = null;
         JsonElement Reply(string profile, string output) => JsonSerializer.SerializeToElement(new
         {
-            ok = true, profile, output, mapping_schema = 3, dirty = deviceDirty,
+            ok = true, profile, output, mapping_schema = 4, dirty = deviceDirty,
             entries = configurations[$"{profile}/{output}"]
         });
         Task<JsonElement> Execute(string action, IReadOnlyDictionary<string, string> parameters)
@@ -216,6 +216,24 @@ internal sealed partial class DynamicModulePageRenderer
         {
             await renderer.RenderAsync(route, host);
             var definition = route.Sections.Single().Controls.Single();
+            Require(renderer._mappingComboExpander is not null, "Missing combination editor");
+            renderer._mappingComboExpander!.IsExpanded = true;
+            var comboBody = (StackPanel)renderer._mappingComboExpander.Content;
+            var comboSource = comboBody.Children.OfType<ComboBox>().Single();
+            var comboTargets = comboBody.Children.OfType<Grid>().Single().Children.OfType<CheckBox>().ToArray();
+            comboSource.SelectedValue = "east";
+            comboTargets[0].IsChecked = true;
+            comboTargets[2].IsChecked = true;
+            Require(renderer._mappingSelectors["south"].SelectedValue?.ToString() == "east" &&
+                    renderer._mappingSelectors["west"].SelectedValue?.ToString() == "east",
+                "Combination did not assign two outputs to one physical source");
+            comboTargets[0].IsChecked = false;
+            Require(renderer._mappingSelectors["south"].SelectedValue?.ToString() == "none",
+                "Removing a combination output did not disable that target");
+            comboTargets[0].IsChecked = true;
+            if (definition.MappingOutput == "xbox")
+                Require(renderer._mappingDiagram!.AllTargets.Count == 17 && comboTargets.Length == 17,
+                    "Xbox mapping exposes unsupported output buttons");
             renderer._mappingSelectors["west"].SelectedValue = "east";
             await renderer.ApplyMappingAsync(definition);
             Require(configurations[$"{definition.MappingProfile}/{definition.MappingOutput}"]["west"] == "east",
@@ -237,7 +255,7 @@ internal sealed partial class DynamicModulePageRenderer
         Require(renderer._mappingDiagram!.EditorContent is null, "Disconnect left an editor open");
         await File.WriteAllLinesAsync(Path.Combine(outputDirectory, "commands.txt"), commands);
         await File.WriteAllTextAsync(Path.Combine(outputDirectory, "result.txt"),
-            "PASS four-route parameters and writes, draft isolation, delta save, picker navigation stress, native output targets, failure gating, legacy firmware, stale replies, disconnect, large/narrow/short/scrolled/light/dark rendering");
+            "PASS six-route parameters and writes, combinations, draft isolation, delta save, picker navigation stress, native output targets, failure gating, legacy firmware, stale replies, disconnect, large/narrow/short/scrolled/light/dark rendering");
 
         async Task CheckDiagramGroupsAsync(string prefix)
         {

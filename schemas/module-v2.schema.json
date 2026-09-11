@@ -138,7 +138,7 @@
         "resetAction": { "$ref": "#/$defs/id" },
         "saveAction": { "$ref": "#/$defs/id" },
         "mappingProfile": { "enum": ["ds5", "ns2pro"] },
-        "mappingOutput": { "enum": ["ds5", "ns2pro"] },
+        "mappingOutput": { "enum": ["ds5", "ns2pro", "xbox"] },
         "sourceCatalog": { "$ref": "#/$defs/id" },
         "targetCatalog": { "$ref": "#/$defs/id" },
         "visibleWhen": { "$ref": "#/$defs/condition" }

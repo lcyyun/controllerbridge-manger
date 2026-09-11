@@ -40,6 +40,12 @@ internal sealed partial class DynamicModulePageRenderer
         "左摇杆按下", "右摇杆按下", "Home", "触摸板（PS 输出）", "静音（PS 输出）", "截图",
         "GL", "GR", "左 Fn（PS 输出）", "右 Fn（PS 输出）", "C"
     };
+    private static readonly string[] XboxTargetLabels =
+    {
+        "A", "B", "X", "Y", "方向键上", "方向键下", "方向键左", "方向键右",
+        "LB", "RB", "LT", "RT", "Back", "Start", "LS", "RS", "Xbox",
+        "触摸板", "静音", "截图", "左背键", "右背键", "左 Fn", "右 Fn", "C"
+    };
     private readonly Func<string, IReadOnlyDictionary<string, string>,
         Task<JsonElement>> _executeActionAsync;
     private readonly Action<string, bool> _showStatus;
@@ -54,6 +60,7 @@ internal sealed partial class DynamicModulePageRenderer
     private ControllerMappingDiagram? _mappingDiagram;
     private AppBarButton? _mappingSaveButton;
     private CommandBar? _mappingToolbar;
+    private Action? _refreshMappingCombo;
     private readonly Dictionary<string, Button> _captureButtons = new();
     private Dictionary<string, string> _deviceMapping = new();
     private readonly Dictionary<string, Dictionary<string, string>> _mappingDrafts = new();
@@ -102,6 +109,8 @@ internal sealed partial class DynamicModulePageRenderer
         _mappingDiagram = null;
         _mappingSaveButton = null;
         _mappingToolbar = null;
+        _refreshMappingCombo = null;
+        _mappingComboExpander = null;
         _captureButtons.Clear();
         _mappingLoaded = false;
         _mappingBusy = false;
@@ -467,12 +476,13 @@ internal sealed partial class DynamicModulePageRenderer
             return Task.CompletedTask;
         });
         var ns = (definition.MappingOutput ?? definition.MappingProfile) == "ns2pro";
-        var swapAb = MappingActionButton(ns ? "交换 A / B" : "交换 × / ○", Symbol.Sync, () =>
+        var xbox = definition.MappingOutput == "xbox";
+        var swapAb = MappingActionButton(ns || xbox ? "交换 A / B" : "交换 × / ○", Symbol.Sync, () =>
         {
             SwapMappingValues("south", "east");
             return Task.CompletedTask;
         });
-        var swapXy = MappingActionButton(ns ? "交换 X / Y" : "交换 □ / △", Symbol.Sync, () =>
+        var swapXy = MappingActionButton(ns || xbox ? "交换 X / Y" : "交换 □ / △", Symbol.Sync, () =>
         {
             SwapMappingValues("west", "north");
             return Task.CompletedTask;
@@ -551,6 +561,7 @@ internal sealed partial class DynamicModulePageRenderer
             definition.MappingProfile,
             includeCrossIdentityTargets: definition.MappingOutput is null);
         panel.Children.Add(_mappingDiagram);
+        panel.Children.Add(CreateMappingComboEditor(definition));
         RefreshMappingEnabledState();
         return panel;
     }
@@ -789,6 +800,7 @@ internal sealed partial class DynamicModulePageRenderer
 
     private void UpdateDraftStatus()
     {
+        _refreshMappingCombo?.Invoke();
         _mappingDiagram?.Refresh(_mappingLoaded, _mappingBusy, _deviceMapping, _mappingDeviceDirty);
         if (!_mappingLoaded) return;
         var custom = _mappingSelectors.Count(pair =>
@@ -819,6 +831,7 @@ internal sealed partial class DynamicModulePageRenderer
 
     private void RefreshMappingEnabledState()
     {
+        _refreshMappingCombo?.Invoke();
         _mappingDiagram?.Refresh(_mappingLoaded, _mappingBusy, _deviceMapping, _mappingDeviceDirty);
         if (!_mappingLoaded && _mappingCountText is not null)
             _mappingCountText.Text = "尚未读取";
@@ -861,6 +874,7 @@ internal sealed partial class DynamicModulePageRenderer
         {
             "ns2pro" => Ns2ProTargetLabels,
             "ds5" => Ds5TargetLabels,
+            "xbox" => XboxTargetLabels,
             _ => ControlLabels
         };
         return labels[index];
@@ -872,7 +886,8 @@ internal sealed partial class DynamicModulePageRenderer
             : definition?.MappingProfile == "ds5" ? Ds5TargetLabels[index] : ControlLabels[index];
 
     private static string ProfileLabel(string? profile) =>
-        profile == "ns2pro" ? "Nintendo NS2Pro" : profile == "ds5" ? "DualSense" : "通用手柄";
+        profile == "ns2pro" ? "Nintendo NS2Pro" : profile == "ds5" ? "DualSense" :
+        profile == "xbox" ? "Xbox 360" : "通用手柄";
 
     private static bool IsPhysicalControl(string? profile, string id) =>
         profile == "ds5" ? id is not ("capture" or "c")
