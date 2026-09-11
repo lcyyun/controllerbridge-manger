@@ -58,6 +58,8 @@ internal sealed partial class DynamicModulePageRenderer
     private TextBlock? _mappingCountText;
     private InfoBar? _mappingError;
     private ControllerMappingDiagram? _mappingDiagram;
+    private ControllerMappingDiagram? _inputMappingDiagram;
+    private bool _expandAdvancedForSmoke;
     private AppBarButton? _mappingSaveButton;
     private CommandBar? _mappingToolbar;
     private Action? _refreshMappingCombo;
@@ -99,6 +101,7 @@ internal sealed partial class DynamicModulePageRenderer
         _mappingVersion++;
         CancelCapture();
         _mappingDiagram?.CloseEditor();
+        _inputMappingDiagram?.CloseEditor();
         host.Children.Clear();
         _controls.Clear();
         _mappingSelectors.Clear();
@@ -107,6 +110,7 @@ internal sealed partial class DynamicModulePageRenderer
         _mappingCountText = null;
         _mappingError = null;
         _mappingDiagram = null;
+        _inputMappingDiagram = null;
         _mappingSaveButton = null;
         _mappingToolbar = null;
         _refreshMappingCombo = null;
@@ -234,6 +238,7 @@ internal sealed partial class DynamicModulePageRenderer
     {
         CancelCapture();
         _mappingDiagram?.CloseEditor();
+        _inputMappingDiagram?.CloseEditor();
     }
 
     public void InvalidateConnection()
@@ -246,6 +251,7 @@ internal sealed partial class DynamicModulePageRenderer
         _usbReportSource = "";
         CancelCapture();
         _mappingDiagram?.CloseEditor();
+        _inputMappingDiagram?.CloseEditor();
         RefreshMappingEnabledState();
         UpdateMappingStatus("设备已断开 · 尚未读取");
     }
@@ -560,8 +566,26 @@ internal sealed partial class DynamicModulePageRenderer
                 : MappingSourceLabel(definition, Array.IndexOf(ControlIds, id)),
             definition.MappingProfile,
             includeCrossIdentityTargets: definition.MappingOutput is null);
-        panel.Children.Add(_mappingDiagram);
-        panel.Children.Add(CreateMappingComboEditor(definition));
+        _inputMappingDiagram = new ControllerMappingDiagram(definition.MappingProfile,
+            _mappingSelectors, _captureButtons,
+            id => MappingSourceLabel(definition, Array.IndexOf(ControlIds, id)),
+            CancelCapture, sourceProfile: definition.MappingProfile,
+            includeCrossIdentityTargets: false,
+            sourceEditor: id => CreateSourceOutputEditor(definition, id),
+            outputLabel: id => MappingTargetLabel(definition, Array.IndexOf(ControlIds, id)),
+            outputAvailable: id => IsMappingOutputAvailable(definition, id));
+        panel.Children.Add(_inputMappingDiagram);
+        var advanced = new StackPanel { Spacing = 16 };
+        advanced.Children.Add(_mappingDiagram);
+        advanced.Children.Add(CreateMappingComboEditor(definition));
+        panel.Children.Add(new Expander
+        {
+            Header = "高级：按输出目标编辑",
+            IsExpanded = _expandAdvancedForSmoke,
+            Content = advanced,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch
+        });
         RefreshMappingEnabledState();
         return panel;
     }
@@ -801,6 +825,7 @@ internal sealed partial class DynamicModulePageRenderer
     private void UpdateDraftStatus()
     {
         _refreshMappingCombo?.Invoke();
+        _inputMappingDiagram?.Refresh(_mappingLoaded, _mappingBusy, _deviceMapping, _mappingDeviceDirty);
         _mappingDiagram?.Refresh(_mappingLoaded, _mappingBusy, _deviceMapping, _mappingDeviceDirty);
         if (!_mappingLoaded) return;
         var custom = _mappingSelectors.Count(pair =>
@@ -832,6 +857,7 @@ internal sealed partial class DynamicModulePageRenderer
     private void RefreshMappingEnabledState()
     {
         _refreshMappingCombo?.Invoke();
+        _inputMappingDiagram?.Refresh(_mappingLoaded, _mappingBusy, _deviceMapping, _mappingDeviceDirty);
         _mappingDiagram?.Refresh(_mappingLoaded, _mappingBusy, _deviceMapping, _mappingDeviceDirty);
         if (!_mappingLoaded && _mappingCountText is not null)
             _mappingCountText.Text = "尚未读取";

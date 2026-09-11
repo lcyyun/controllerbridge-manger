@@ -54,7 +54,7 @@ internal sealed partial class DynamicModulePageRenderer
             if (!condition) throw new InvalidOperationException(description);
         }
         var renderer = new DynamicModulePageRenderer(Execute,
-            (text, error) => statuses.Add($"{error}: {text}"));
+            (text, error) => statuses.Add($"{error}: {text}")) { _expandAdvancedForSmoke = true };
         var host = new StackPanel { Spacing = 14 };
         var frame = new Grid
         {
@@ -241,6 +241,31 @@ internal sealed partial class DynamicModulePageRenderer
             await CaptureAsync(frame, $"route-{definition.MappingProfile}-{definition.MappingOutput}.png");
         }
         window.AppWindow.Resize(new SizeInt32(1920, 1080));
+        renderer._expandAdvancedForSmoke = false;
+        foreach (var inputProfile in new[] { "ds5", "ns2pro" })
+        {
+            var sourcePage = module.Pages.Single(page => page.Id ==
+                (inputProfile == "ds5" ? "ps-xbox-mapping" : "ns-xbox-mapping"));
+            await renderer.RenderAsync(sourcePage, host);
+            await Task.Delay(150);
+            Require(renderer._inputMappingDiagram!.AllTargets.Count == (inputProfile == "ds5" ? 23 : 21),
+                "Input model changed with Xbox output identity");
+            renderer._inputMappingDiagram.OpenEditor("south");
+            Require(renderer._inputMappingDiagram.EditorContent is StackPanel,
+                "Physical input button did not open output editor");
+            var sourceEditor = (StackPanel)renderer._inputMappingDiagram.EditorContent!;
+            var outputChecks = ((StackPanel)sourceEditor.Children.OfType<ScrollViewer>().Single().Content)
+                .Children.OfType<CheckBox>().ToArray();
+            Require(outputChecks.Length == 17, "Xbox output choices are not native");
+            outputChecks[0].IsChecked = true;
+            outputChecks[2].IsChecked = true;
+            Require(renderer._mappingSelectors["south"].SelectedValue?.ToString() == "south" &&
+                    renderer._mappingSelectors["west"].SelectedValue?.ToString() == "south",
+                "Source-centric combination changed the wrong direction");
+            await CaptureAsync(sourceEditor, $"source-{inputProfile}-outputs.png");
+            renderer._inputMappingDiagram.CloseEditor();
+            await CaptureAsync(frame, $"source-{inputProfile}-xbox.png");
+        }
         await CaptureAsync(frame, "mapping-large.png");
         window.AppWindow.Resize(new SizeInt32(860, 650));
         await CaptureAsync(frame, "mapping-short.png");

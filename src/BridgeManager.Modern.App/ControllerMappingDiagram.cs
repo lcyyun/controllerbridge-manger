@@ -15,6 +15,9 @@ namespace BridgeManager.Modern;
 internal sealed class ControllerMappingDiagram : StackPanel
 {
     private readonly string? _profile;
+    private readonly Func<string, FrameworkElement>? _sourceEditor;
+    private readonly Func<string, string>? _outputLabel;
+    private readonly Func<string, bool>? _outputAvailable;
     private readonly IReadOnlyDictionary<string, ComboBox> _selectors;
     private readonly IReadOnlyDictionary<string, Button> _captureButtons;
     private readonly Func<string, string> _label;
@@ -58,9 +61,15 @@ internal sealed class ControllerMappingDiagram : StackPanel
         IReadOnlyDictionary<string, Button> captureButtons,
         Func<string, string> label, Action cancelCapture,
         Func<string, string>? sourceLabel = null, string? sourceProfile = null,
-        bool includeCrossIdentityTargets = true)
+        bool includeCrossIdentityTargets = true,
+        Func<string, FrameworkElement>? sourceEditor = null,
+        Func<string, string>? outputLabel = null,
+        Func<string, bool>? outputAvailable = null)
     {
         _profile = profile;
+        _sourceEditor = sourceEditor;
+        _outputLabel = outputLabel;
+        _outputAvailable = outputAvailable;
         // Renderer dictionaries are reused for the next route. Keep the exact
         // controls owned by this diagram so delayed XAML callbacks cannot see
         // a cleared or repopulated dictionary from another page.
@@ -141,7 +150,7 @@ internal sealed class ControllerMappingDiagram : StackPanel
         captionRow.Children.Add(_viewCaption);
         var relation = new TextBlock
         {
-            Text = "目标按键  ←  来源按键",
+            Text = _sourceEditor is null ? "目标按键  ←  来源按键" : "实际输入按键  →  输出动作",
             FontSize = 12,
             Opacity = 0.66,
             VerticalAlignment = VerticalAlignment.Center
@@ -159,6 +168,12 @@ internal sealed class ControllerMappingDiagram : StackPanel
             Content = _changeList
         };
         Children.Add(_changes);
+        Loaded += (_, _) =>
+        {
+            _detached = false;
+            _layoutWidth = 0;
+            LayoutDiagram();
+        };
         SizeChanged += (_, args) =>
         {
             if (Math.Abs(args.NewSize.Width - _layoutWidth) < 1 || _layoutPending) return;
@@ -197,18 +212,21 @@ internal sealed class ControllerMappingDiagram : StackPanel
         foreach (var (target, callout) in _callouts)
         {
             var source = Source(target);
-            var custom = loaded && target != source;
-            var pending = loaded && device.TryGetValue(target, out var saved) && saved != source;
-            callout.Value.Text = loaded ? _sourceLabel(source) : "尚未读取";
+            var custom = loaded && IsCustom(target);
+            var pending = loaded && (_sourceEditor is null
+                ? device.TryGetValue(target, out var saved) && saved != source
+                : OutputIds(target).SequenceEqual(OutputIds(target, device)) == false);
+            var value = _sourceEditor is null ? _sourceLabel(source) : OutputText(target);
+            callout.Value.Text = loaded ? value : "尚未读取";
             callout.Value.Foreground = custom ? _accent : Resource("TextFillColorPrimaryBrush");
             callout.Button.IsEnabled = loaded && !busy;
             callout.Dot.Visibility = pending ? Visibility.Visible : Visibility.Collapsed;
             callout.Button.BorderBrush = custom ? _accent : Resource("CardStrokeColorDefaultBrush");
             ToolTipService.SetToolTip(callout.Button, loaded
-                ? $"{_label(target)} ← {_sourceLabel(source)}{(pending ? " · 未应用" : "")}"
+                ? $"{_label(target)} {(_sourceEditor is null ? "←" : "→")} {value}{(pending ? " · 未应用" : "")}"
                 : "等待从设备读取映射");
             AutomationProperties.SetName(callout.Button,
-                $"{_label(target)} 的来源：{(loaded ? _sourceLabel(source) : "尚未读取")}，更换映射");
+                $"{_label(target)} 的{(_sourceEditor is null ? "来源" : "输出")}：{(loaded ? value : "尚未读取")}，更换映射");
             if (_pins.TryGetValue(target, out var pin))
                 pin.IsEnabled = loaded && !busy;
         }
@@ -218,6 +236,31 @@ internal sealed class ControllerMappingDiagram : StackPanel
 
     internal void OpenEditor(string target, FrameworkElement? placement = null)
     {
+        if (_detached) return;
+        if (_sourceEditor is not null)
+        {
+            if (!_loaded || _busy || XamlRoot is null) return;
+            CloseEditor();
+            _selectedTarget = target;
+            var sourceOwner = placement ?? (FrameworkElement?)_callouts.GetValueOrDefault(target)?.Button ?? this;
+            var sourceFlyout = new Flyout { Content = _sourceEditor(target), XamlRoot = sourceOwner.XamlRoot };
+            if (sourceFlyout.Content is StackPanel sourcePanel)
+            {
+                sourcePanel.RequestedTheme = ActualTheme;
+                sourcePanel.Background = Resource("CardBackgroundFillColorDefaultBrush");
+            }
+            sourceFlyout.Closed += (_, _) =>
+            {
+                if (!ReferenceEquals(_editor, sourceFlyout)) return;
+                _editor = null;
+                _selectedTarget = null;
+                RefreshLineColors();
+            };
+            _editor = sourceFlyout;
+            sourceFlyout.ShowAt(sourceOwner);
+            RefreshLineColors();
+            return;
+        }
         if (!_loaded || _busy || XamlRoot is null ||
             !_selectors.TryGetValue(target, out var selector) ||
             !_captureButtons.TryGetValue(target, out var captureButton)) return;
@@ -534,6 +577,11 @@ internal sealed class ControllerMappingDiagram : StackPanel
 
     private void RebuildChangeList()
     {
+        if (_sourceEditor is not null)
+        {
+            _changes.Visibility = Visibility.Collapsed;
+            return;
+        }
         _changeList.Children.Clear();
         var custom = _selectors.Keys.Where(target => _loaded && Source(target) != target).ToArray();
         var changed = _selectors.Keys.Where(target => _loaded &&
@@ -602,14 +650,14 @@ internal sealed class ControllerMappingDiagram : StackPanel
         if (_detached) return;
         foreach (var (target, line) in _lines)
         {
-            var active = _selectedTarget == target || _loaded && Source(target) != target;
+            var active = _selectedTarget == target || _loaded && IsCustom(target);
             line.Stroke = active ? _accent : Resource("TextFillColorTertiaryBrush");
             line.StrokeThickness = active ? 1.8 : 1.1;
             line.Opacity = active ? 0.9 : 0.5;
         }
         foreach (var (target, pin) in _pins)
         {
-            var active = _selectedTarget == target || _loaded && Source(target) != target;
+            var active = _selectedTarget == target || _loaded && IsCustom(target);
             pin.BorderThickness = new Thickness(active ? 2.5 : 1.2);
             pin.Opacity = active ? 1 : 0.65;
         }
@@ -619,6 +667,19 @@ internal sealed class ControllerMappingDiagram : StackPanel
         _selectors.TryGetValue(target, out var selector)
             ? selector.SelectedValue?.ToString() ?? "none"
             : "none";
+
+    private IEnumerable<string> OutputIds(string source, IReadOnlyDictionary<string, string>? device = null) =>
+        _selectors.Keys.Where(id => (_outputAvailable?.Invoke(id) ?? true) &&
+            (device is null ? Source(id) : device.GetValueOrDefault(id, "none")) == source);
+
+    private string OutputText(string source)
+    {
+        var text = string.Join(" + ", OutputIds(source).Select(id => _outputLabel!(id)));
+        return text.Length == 0 ? "无输出" : text;
+    }
+
+    private bool IsCustom(string key) => _sourceEditor is null ? Source(key) != key :
+        !OutputIds(key).SequenceEqual(new[] { key });
 
     private string ShortLabel(string target) => target switch
     {
