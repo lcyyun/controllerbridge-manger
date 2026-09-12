@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$PackagePath,
     [switch]$AllowLocalPreview,
+    [switch]$Installed,
     [switch]$LaunchSmoke
 )
 
@@ -215,6 +216,10 @@ foreach ($line in Get-Content -LiteralPath $hashFile) {
     }
 }
 foreach ($file in Get-ChildItem -LiteralPath $root -Recurse -File -Force) {
+    if ($Installed -and $file.DirectoryName -eq $root -and
+        $file.Name -cin @('unins000.exe', 'unins000.dat')) {
+        continue
+    }
     if ($file.FullName -ne $hashFile -and -not $hashedFiles.Contains($file.FullName)) {
         throw "Package file is missing from SHA256SUMS.txt: $($file.FullName)"
     }

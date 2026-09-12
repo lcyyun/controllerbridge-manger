@@ -63,6 +63,28 @@ marks hardware testing as incomplete, and does not claim a published source
 commit. Verification rejects local previews without `-AllowLocalPreview`.
 The unchanged ESP32 and Pico archives must still match the release lock.
 
+## Windows Installer
+
+Build the verified portable package first, then use Inno Setup 6.5.4 or newer:
+
+```powershell
+pwsh -File tools\package-installer.ps1 `
+  -PackagePath dist\BridgeManager-input-mapping-win-x64 `
+  -IsccPath 'C:\Tools\Inno Setup 6\ISCC.exe' `
+  -Version 0.2.0 -AllowLocalPreview
+```
+
+The resulting `dist\ControllerBridge-Setup-0.2.0-win-x64.exe` is a single
+download containing the app, runtime dependencies, firmware and flash tool.
+Installation is per-user and creates a Start menu shortcut; a desktop shortcut
+is optional. App settings under `%LOCALAPPDATA%\ControllerBridge` are not removed
+on uninstall. Releases are unsigned unless a separate signing step is used.
+Use `-AllowLocalPreview` only for prereleases with unvalidated firmware.
+
+Run `tools\test-installer.ps1 -InstallerPath <setup.exe>` in a clean Windows
+account to verify installation, all payload hashes, offline UI smoke tests
+and uninstall. It refuses to overwrite an existing installed manager.
+
 ## Classic Diagnostics
 
 Classic output is optional; the default package does not require old local
