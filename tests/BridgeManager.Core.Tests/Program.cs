@@ -81,6 +81,23 @@ if (args.Length == 2 && args[0] == "--install-module-check")
     return;
 }
 
+if (args.Length == 1 && args[0] == "--github-download-check")
+{
+    var service = new GithubModuleReleaseService();
+    var assets = await service.GetModuleAssetsAsync();
+    var latest = assets.First(asset => asset.Name == "sf32-unified-0.7.0-dev.cbmodule");
+    var path = await service.DownloadAsync(latest);
+    try
+    {
+        AssertEqual(latest.Size, new FileInfo(path).Length);
+        Console.WriteLine($"PASS anonymous firmware download and SHA256: {latest.Name}");
+    }
+    finally { File.Delete(path); }
+    var update = await new ManagerUpdateService().CheckAsync(includePrerelease: true);
+    Console.WriteLine($"PASS anonymous manager update check: {update?.Tag ?? "no newer version"}");
+    return;
+}
+
 if (args.Length == 1 && args[0] == "--github-module-list")
 {
     var assets = await new GithubModuleReleaseService()
@@ -134,6 +151,7 @@ if (args.Length >= 2 && args[0] == "--hid-raw")
 
 var tests = new (string Name, Action Run)[]
 {
+    ("validates manager update channels, versions and origin", ManagerUpdateSelection),
     ("builds Windows feature command payload", BuildsWindowsFeatureCommandPayload),
     ("builds output command payload", BuildsOutputCommandPayload),
     ("parses reply with report id", ParsesReplyWithReportId),
@@ -201,6 +219,33 @@ var tests = new (string Name, Action Run)[]
     ("builds source-aware diagnostics", BuildsSourceAwareDiagnostics),
     ("rejects truncated manager commands", RejectsLongCommands)
 };
+
+static void ManagerUpdateSelection()
+{
+    string Feed(string tag, bool preview = true, string? url = null, string? digest = null)
+    {
+        var version = tag.TrimStart('v').Split('-')[0];
+        var name = $"ControllerBridge-Setup-{version}-win-x64.exe";
+        return System.Text.Json.JsonSerializer.Serialize(new[] { new {
+            draft = false, prerelease = preview, tag_name = tag,
+            assets = new[] { new {
+                name, size = 1024,
+                browser_download_url = url ?? $"https://github.com/lcyyun/controllerbridge-manger/releases/download/{tag}/{name}",
+                digest = digest ?? "sha256:" + new string('a', 64)
+            }}
+        }});
+    }
+    var current = new Version(0, 2, 1);
+    const string tag = "v0.2.1-preview.1";
+    AssertEqual(true, ManagerUpdateService.SelectUpdate(Feed(tag), current, tag, true) is null);
+    AssertEqual(true, ManagerUpdateService.SelectUpdate(Feed("v0.2.0-preview.9"), current, tag, true) is null);
+    AssertEqual(true, ManagerUpdateService.SelectUpdate(Feed("v0.2.2-preview.1"), current, tag, false) is null);
+    AssertEqual("v0.2.1-preview.2", ManagerUpdateService.SelectUpdate(Feed("v0.2.1-preview.2"), current, tag, true)!.Tag);
+    AssertEqual("v0.2.1", ManagerUpdateService.SelectUpdate(Feed("v0.2.1", false), current, tag, false)!.Tag);
+    AssertEqual(true, ManagerUpdateService.SelectUpdate(Feed("v0.2.2", false, "https://example.com/setup.exe"), current, tag, false) is null);
+    AssertEqual(true, ManagerUpdateService.SelectUpdate(Feed("v0.2.2", false, digest: "sha256:bad"), current, tag, false) is null);
+    AssertEqual(true, ManagerUpdateService.SelectUpdate(Feed("v0.2.1-preview.2"), current, "v0.2.1", true) is null);
+}
 
 foreach (var test in tests)
 {

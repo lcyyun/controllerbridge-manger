@@ -67,6 +67,9 @@
                 </NavigationViewItem>
             </NavigationView.MenuItems>
             <NavigationView.FooterMenuItems>
+                <NavigationViewItem x:Name="UpdateNavItem" Content="检查更新" Tag="update" SelectsOnInvoked="False">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE72C;" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
                 <NavigationViewItem x:Name="WizardNavItem" Content="固件与设置" Tag="wizard" SelectsOnInvoked="False" ToolTipService.ToolTip="固件与设置向导">
                     <NavigationViewItem.Icon><FontIcon Glyph="&#xE896;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>

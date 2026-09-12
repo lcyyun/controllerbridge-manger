@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Security.Cryptography;
 
 namespace BridgeManager.Core.FirmwareModules;
 
@@ -8,7 +9,8 @@ public sealed record GithubModuleAsset(
     string DownloadUrl,
     string Tag,
     long Size,
-    DateTimeOffset? PublishedAt)
+    DateTimeOffset? PublishedAt,
+    string? Sha256 = null)
 {
     public string DisplayName => Path.GetFileNameWithoutExtension(Name);
     public string Detail =>
@@ -29,6 +31,16 @@ public sealed class GithubModuleReleaseService
     {
         ValidateRepositoryPart(owner);
         ValidateRepositoryPart(repository);
+        if (owner == DefaultOwner && repository == DefaultRepository)
+        {
+            var official = await Task.WhenAll(new[]
+            {
+                "controllerbridge-SF32LB52", "controllerbridge-pico2w",
+                "controllerbridge-esp32s3"
+            }.Select(repo => GetModuleAssetsAsync(owner, repo, cancellationToken)));
+            return official.SelectMany(items => items)
+                .OrderByDescending(asset => asset.PublishedAt).ToArray();
+        }
         var assets = new List<GithubModuleAsset>();
         for (var page = 1; ; page++)
         {
@@ -68,13 +80,21 @@ public sealed class GithubModuleReleaseService
                     var size = asset.GetProperty("size").GetInt64();
                     if (size is <= 0 or > MaximumPackageBytes ||
                         !Uri.TryCreate(downloadUrl, UriKind.Absolute, out var uri) ||
+                        uri.Scheme != Uri.UriSchemeHttps ||
+                        !uri.AbsolutePath.StartsWith($"/{owner}/{repository}/releases/download/", StringComparison.Ordinal) ||
                         !uri.Host.Equals("github.com",
                             StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
                     }
+                    var digest = asset.TryGetProperty("digest", out var digestElement)
+                        ? digestElement.GetString() : null;
+                    var sha256 = digest?.StartsWith("sha256:", StringComparison.Ordinal) == true
+                        ? digest[7..] : null;
+                    if (sha256 is null || sha256.Length != 64 || !sha256.All(Uri.IsHexDigit))
+                        continue;
                     assets.Add(new GithubModuleAsset(
-                        name, downloadUrl, tag, size, publishedAt));
+                        name, downloadUrl, tag, size, publishedAt, sha256));
                 }
             }
             if (releaseCount < 100)
@@ -94,7 +114,9 @@ public sealed class GithubModuleReleaseService
         CancellationToken cancellationToken = default)
     {
         var uri = new Uri(asset.DownloadUrl);
-        if (!uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) ||
+        if (uri.Scheme != Uri.UriSchemeHttps ||
+            !uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) ||
+            asset.Sha256 is null || asset.Sha256.Length != 64 || !asset.Sha256.All(Uri.IsHexDigit) ||
             asset.Size is <= 0 or > MaximumPackageBytes)
         {
             throw new InvalidDataException("GitHub module asset is invalid.");
@@ -118,6 +140,7 @@ public sealed class GithubModuleReleaseService
             await using var target = new FileStream(path, FileMode.CreateNew,
                 FileAccess.Write, FileShare.None, 81920, useAsync: true);
             var buffer = new byte[81920];
+            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             long written = 0;
             while (true)
             {
@@ -131,6 +154,7 @@ public sealed class GithubModuleReleaseService
                 }
                 await target.WriteAsync(buffer.AsMemory(0, count),
                     cancellationToken);
+                hash.AppendData(buffer, 0, count);
                 progress?.Report(Math.Clamp((double)written / length, 0, 1));
             }
             await target.FlushAsync(cancellationToken);
@@ -139,6 +163,9 @@ public sealed class GithubModuleReleaseService
                 throw new InvalidDataException(
                     $"GitHub module size mismatch: expected {asset.Size}, got {written}.");
             }
+            if (!Convert.ToHexString(hash.GetHashAndReset()).Equals(asset.Sha256,
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("GitHub module SHA256 mismatch.");
             return path;
         }
         catch

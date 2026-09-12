@@ -31,16 +31,13 @@ pwsh -File tools\package-modern-windows.ps1 -Offline
 pwsh -File tools\package-modern-windows.ps1 -ModulePackageDirectory C:\releases\modules -Offline
 ```
 
-Private repositories require an account with access (`gh auth login`). The
-builder delegates authentication to GitHub CLI; no token belongs in source,
-release assets, the lock file or the application. The initial Actions workflow
-builds and tests source only, without cross-repository private downloads.
-
-The application release feed is `lcyyun/controllerbridge-manger`. Firmware
-repositories own their canonical builds; manager releases can carry
-byte-identical copies of reviewed firmware assets. App-side anonymous updates
-cannot read private releases. Until user authentication is implemented in the
-app, download those releases through an authenticated external client.
+The application release feed is `lcyyun/controllerbridge-manger`. The firmware
+wizard reads the public SF32LB52, Pico2W and ESP32S3 repository releases directly.
+App-side downloads require no GitHub login and verify the release asset size
+and SHA-256 digest. Missing digests are rejected.
+Manager update checks default to stable releases; preview releases require
+explicit selection. Downloading and launching an installer each require user
+confirmation. Firmware flashing blocks installer launch.
 
 Firmware builds and new module packages are produced in the respective
 firmware repositories using `module/package.ps1`. Do not rename an old image

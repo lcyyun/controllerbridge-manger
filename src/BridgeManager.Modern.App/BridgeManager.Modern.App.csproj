@@ -6,6 +6,7 @@
     <WindowsSdkPackageVersion>10.0.19041.38</WindowsSdkPackageVersion>
     <RootNamespace>BridgeManager.Modern</RootNamespace>
     <AssemblyName>BridgeManager.Modern.App</AssemblyName>
+    <Version>0.2.1-preview.1</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <UseWinUI>true</UseWinUI>
     <WindowsPackageType>None</WindowsPackageType>

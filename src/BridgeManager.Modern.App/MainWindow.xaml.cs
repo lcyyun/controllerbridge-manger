@@ -312,6 +312,11 @@ public sealed partial class MainWindow
         NavigationView sender,
         NavigationViewItemInvokedEventArgs args)
     {
+        if ((args.InvokedItemContainer as NavigationViewItem)?.Tag?.ToString() == "update")
+        {
+            _ = CheckManagerUpdateAsync();
+            return;
+        }
         if ((args.InvokedItemContainer as NavigationViewItem)?.Tag?.ToString() ==
             "wizard")
         {
