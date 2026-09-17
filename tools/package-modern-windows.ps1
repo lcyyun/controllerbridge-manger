@@ -179,6 +179,14 @@ foreach ($modulePackage in Get-ChildItem -LiteralPath $modulePackageRoot `
     Remove-Item -LiteralPath $extractRoot -Recurse -Force
 }
 
+$blModuleRoot = Join-Path $outputDir 'modules/bl616-unified'
+foreach ($notice in @('LICENSE', 'NOTICE.md', 'LICENSES')) {
+    Copy-Item -LiteralPath (Join-Path $managerRoot "modules/bl616-unified/$notice") `
+        -Destination $blModuleRoot -Recurse -Force
+}
+& (Join-Path $PSScriptRoot 'pack-module-directory.ps1') -SourceDirectory $blModuleRoot `
+    -OutputPath (Join-Path $modulePackageRoot 'bl616-unified-0.1.0.cbmodule')
+
 Copy-Item -LiteralPath (Join-Path $managerRoot 'README.md') `
     -Destination (Join-Path $outputDir 'README.md') -Force
 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'NOTICE.md') `

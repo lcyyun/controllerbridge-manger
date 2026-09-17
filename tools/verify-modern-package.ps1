@@ -118,6 +118,7 @@ foreach ($filePin in @($pin.executable, $pin.license)) {
 }
 
 $expectedMethods = @{
+    'bl616-unified' = 'BouffaloUart'
     'esp32s3-ns2-bridge' = 'None'
     'sf32-unified' = 'SifliSerial'
     'pico-unified-bridge' = 'PicoUf2'
@@ -148,7 +149,7 @@ foreach ($filePin in $blBundle.files) {
     }
 }
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-foreach ($moduleId in @('esp32s3-ns2-bridge', 'sf32-unified', 'pico-unified-bridge')) {
+foreach ($moduleId in @('bl616-unified', 'esp32s3-ns2-bridge', 'sf32-unified', 'pico-unified-bridge')) {
     $moduleRoot = Join-Path $root "modules\$moduleId"
     $manifestPath = Get-ContainedFile -BasePath $moduleRoot -RelativePath 'module.json'
     $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -188,6 +189,10 @@ foreach ($moduleId in @('esp32s3-ns2-bridge', 'sf32-unified', 'pico-unified-brid
                 if (-not ($artifactFiles -contains $requiredPath)) {
                     throw "SF32 Nano parameters must reference $requiredFlashFile"
                 }
+            }
+        } elseif ($firmware.flashMethod -eq 'BouffaloUart') {
+            foreach ($flashFile in $blBundle.files) {
+                $artifactFiles.Add((Get-ContainedFile -BasePath $blArtifactRoot -RelativePath ([string]$flashFile.path)))
             }
         } elseif ([IO.Path]::GetExtension($artifactPath) -ne '.uf2') {
             throw "Pico firmware must reference a UF2: $artifactPath"
@@ -285,10 +290,17 @@ foreach ($filePin in @($blPin.executable, $blPin.license) + @($blPin.supportFile
         throw "Pinned BLFlash size/SHA256 mismatch: $relative"
     }
 }
-$blHelp = (& (Join-Path $blToolRoot $blPin.executable.fileName) --help 2>&1 |
-    Out-String)
-if ($LASTEXITCODE -ne 0 -or -not $blHelp.Contains('chipname')) {
-    throw 'Bundled BLFlashCommand did not pass its read-only help check.'
+$probeRoot = Join-Path ([IO.Path]::GetTempPath()) ('blflash-probe-' + [guid]::NewGuid().ToString('N'))
+try {
+    Copy-Item -LiteralPath $blToolRoot -Destination $probeRoot -Recurse
+    $blHelp = (& (Join-Path $probeRoot $blPin.executable.fileName) --help 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0 -or -not $blHelp.Contains('chipname')) {
+        throw 'Bundled BLFlashCommand did not pass its help check.'
+    }
+} finally {
+    $probePrefix = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
+    if (-not [IO.Path]::GetFullPath($probeRoot).StartsWith($probePrefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe probe cleanup path.' }
+    if (Test-Path -LiteralPath $probeRoot) { Remove-Item -LiteralPath $probeRoot -Recurse -Force }
 }
 Write-Host "Verified bundled BLFlashCommand $($blPin.version) (BL616-only, $($blPin.license.spdx))."
 

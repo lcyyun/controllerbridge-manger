@@ -1,6 +1,8 @@
 {
   "schemaVersion": 1,
   "runtimeApiVersion": 2,
+  "operations": {},
+  "pages": [],
   "id": "bl616-unified",
   "moduleVersion": "0.1.0",
   "displayName": "ControllerBridge BL616",

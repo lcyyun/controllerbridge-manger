@@ -118,7 +118,14 @@ foreach ($firmware in @($manifest.firmware)) {
             @($bundle.files).Count -ne 3) {
             throw "Bouffalo UART artifact is not a valid BL616 bundle."
         }
+        $expectedAddresses = @{boot2='0x000000'; partition='0x00e000'; firmware='@partition'}
+        $bundleKinds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
         foreach ($file in @($bundle.files)) {
+            if (-not $expectedAddresses.ContainsKey([string]$file.kind) -or
+                -not $bundleKinds.Add([string]$file.kind) -or
+                [string]$file.address -cne $expectedAddresses[[string]$file.kind]) {
+                throw 'BL616 bundle has an unexpected or duplicate image kind/address.'
+            }
             $secondary = [string]$file.path
             if ([string]::IsNullOrWhiteSpace($secondary) -or
                 [IO.Path]::IsPathRooted($secondary) -or
@@ -195,6 +202,8 @@ try {
     Write-Host "Single-file firmware compatibility package: $destination"
 }
 finally {
+    $stagePrefix = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
+    if (-not [IO.Path]::GetFullPath($stage).StartsWith($stagePrefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe module-stage cleanup path.' }
     if (Test-Path -LiteralPath $stage) {
         Remove-Item -LiteralPath $stage -Recurse -Force
     }

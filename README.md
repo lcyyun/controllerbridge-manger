@@ -22,6 +22,11 @@ ESP32-S3 still uses its platform tools. Flashing requires explicit confirmation.
 Firmware updates have their own page, separate from the setup wizard. The first
 update source is GitHub Releases; downloaded module packages are validated before
 installation. The page only offers Manager-integrated BL616 and SF32 targets.
+Only packages matching the currently connected receiver are listed. Installation
+also verifies the manifest ID and rejects disconnects/device changes.
+The setup wizard opens above its Manager owner by default; its welcome page has
+a persistent option to disable automatic startup display. It remains available
+from the navigation menu.
 
 Native NS2Pro initialization and direct-PC rumble are not implemented by the
 independent input tester. Receiver-based input and rumble use their existing

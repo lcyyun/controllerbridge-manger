@@ -435,7 +435,7 @@
                                     <ComboBox x:Name="FirmwareSourceBox" Header="固件与兼容包来源" HorizontalAlignment="Stretch" SelectedIndex="0">
                                         <ComboBoxItem Content="GitHub Releases" Tag="github" />
                                     </ComboBox>
-                                    <TextBlock Text="目前只提供经过模块签名清单和 SHA-256 校验的 GitHub Release 更新。" Style="{StaticResource QuietCaptionStyle}" TextWrapping="Wrap" />
+                                    <TextBlock Text="目前只提供经过模块清单和 SHA-256 校验的 GitHub Release 更新。" Style="{StaticResource QuietCaptionStyle}" TextWrapping="Wrap" />
                                     <CheckBox x:Name="ManagerUpdateChecksEnabledCheckBox" Content="启动时检查 Manager 更新" IsChecked="True" Checked="ManagerUpdateChecksEnabled_Changed" Unchecked="ManagerUpdateChecksEnabled_Changed" />
                                     <TextBlock x:Name="ManagerCurrentVersionText" Style="{StaticResource QuietCaptionStyle}" />
                                     <Grid ColumnSpacing="10">

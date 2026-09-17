@@ -57,9 +57,16 @@ Copy-Item -LiteralPath $sourceLicense `
 Copy-Item -LiteralPath $provenancePath `
     -Destination (Join-Path $destinationRoot 'PROVENANCE.json') -Force
 
-$helpOutput = (& (Join-Path $destinationRoot $pin.executable.fileName) --help 2>&1 |
-    Out-String)
-if ($LASTEXITCODE -ne 0 -or -not $helpOutput.Contains('chipname')) {
-    throw 'Bundled BLFlashCommand did not pass its read-only help check.'
+$probeRoot = Join-Path ([IO.Path]::GetTempPath()) ('blflash-probe-' + [guid]::NewGuid().ToString('N'))
+try {
+    Copy-Item -LiteralPath $destinationRoot -Destination $probeRoot -Recurse
+    $helpOutput = (& (Join-Path $probeRoot $pin.executable.fileName) --help 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0 -or -not $helpOutput.Contains('chipname')) {
+        throw 'Bundled BLFlashCommand did not pass its help check.'
+    }
+} finally {
+    $probePrefix = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
+    if (-not [IO.Path]::GetFullPath($probeRoot).StartsWith($probePrefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe probe cleanup path.' }
+    if (Test-Path -LiteralPath $probeRoot) { Remove-Item -LiteralPath $probeRoot -Recurse -Force }
 }
 Write-Host "Bundled BLFlashCommand $($pin.version), BL616 support only: $destinationRoot"

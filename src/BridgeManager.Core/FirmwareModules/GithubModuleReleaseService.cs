@@ -37,8 +37,8 @@ public sealed class GithubModuleReleaseService
             var official = await Task.WhenAll(new[]
             {
                 "controllerbridge-SF32LB52", "controllerbridge-pico2w",
-                "controllerbridge-esp32s3"
-            }.Select(repo => GetModuleAssetsAsync(owner, repo, cancellationToken)));
+                "controllerbridge-esp32s3", DefaultRepository
+            }.Select(repo => GetModuleAssetsAsync(owner, repo, cancellationToken, false)));
             return official.SelectMany(items => items)
                 .OrderByDescending(asset => asset.PublishedAt).ToArray();
         }
