@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "chip": "bl616",
+  "baudRate": 2000000,
+  "files": [
+    {
+      "kind": "boot2",
+      "path": "boot2_bl616_isp_release_v8.1.8.bin",
+      "address": "0x000000",
+      "sha256": "92a329c660e23f1b488a21779cebb6d5fe0ae61fd25dc00d3df7e4334192ace6"
+    },
+    {
+      "kind": "partition",
+      "path": "partition.bin",
+      "address": "0x00e000",
+      "sha256": "99c055a2a7279c04d989a2a270106d2e2584a2d5773b57e40b3af0d87f623d12"
+    },
+    {
+      "kind": "firmware",
+      "path": "controllerbridge_bl616_bl616.bin",
+      "address": "@partition",
+      "sha256": "618b9e7e4fb3a6335c461bbbc6d7507af1a4742452d5f3f4a13490b01156b4a1"
+    }
+  ]
+}

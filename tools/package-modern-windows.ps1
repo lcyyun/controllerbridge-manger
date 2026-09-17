@@ -6,6 +6,7 @@ param(
     [string]$Runtime = 'win-x64',
     [string]$PackageName = 'BridgeManager-modern-win-x64',
     [string]$SftoolPath = $env:BRIDGE_MANAGER_SFTOOL,
+    [string]$BlFlashRoot = $env:BRIDGE_MANAGER_BLFLASH_ROOT,
     [string]$ModulePackageDirectory,
     [string]$ClassicDirectory,
     [switch]$Offline,
@@ -86,6 +87,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Modern manager publish failed.' }
 
 & (Join-Path $PSScriptRoot 'bundle-sftool.ps1') `
     -OutputDirectory $outputDir -SftoolPath $SftoolPath
+& (Join-Path $PSScriptRoot 'bundle-blflash.ps1') `
+    -OutputDirectory $outputDir -FlashCubeRoot $BlFlashRoot
 
 $modulePackageRoot = Join-Path $outputDir 'module-packages'
 New-Item -ItemType Directory -Path $modulePackageRoot -Force | Out-Null
@@ -154,8 +157,9 @@ $packageInfo = @(
     "Built UTC: $([DateTime]::UtcNow.ToString('u'))"
     'Primary transport: USB HID'
     'Firmware support: independently updateable .cbmodule packages'
-    'Default firmware payloads: SF32 Nano flash parameters and binaries; Pico UF2'
+    'Default firmware payloads: BL616 and SF32 Nano verified images; Pico UF2'
     'SF32 flash tool: tools/sftool/sftool.exe (pinned 0.1.16, Apache-2.0)'
+    'BL616 flash tool: tools/blflash/BLFlashCommand.exe (pinned 1.4.3, Apache-2.0)'
     "Classic diagnostics bundled: $([bool]$classicSource)"
 ) -join [Environment]::NewLine
 Set-Content -LiteralPath (Join-Path $outputDir 'PACKAGE-INFO.txt') `

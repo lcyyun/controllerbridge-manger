@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "name": "Bouffalo FlashCube BLFlashCommand",
+  "version": "1.4.3",
+  "target": "Windows x64",
+  "repository": "https://github.com/bouffalolab/bouffalo_sdk",
+  "sourcePath": "tools/bflb_tools/bouffalo_flash_cube",
+  "executable": {
+    "fileName": "BLFlashCommand.exe",
+    "sha256": "db3b205577d42aa461d564ac4bc0b09c45b88652e35b7fc195d44f247eec9460",
+    "size": 10730290
+  },
+  "supportFiles": [
+    { "path": "chips/bl616/eflash_loader/eflash_loader_cfg.conf", "size": 5302, "sha256": "d0f6ba2f6c7cd29f21d4b47d36a97b4da2d5accad93f0c9d3a573ce97bb6baa2" },
+    { "path": "chips/bl616/eflash_loader/eflash_loader_cfg.ini", "size": 5552, "sha256": "0dd7bd39902a29aafe39af875f600a4c5ad3ffc8af89474a42aaae546e507fc1" },
+    { "path": "chips/bl616/efuse_bootheader/efuse_bootheader_cfg.conf", "size": 8145, "sha256": "5ddb1696dfa75e502dac0d65d37b23ff9ad2c729d43c1ccf10bb9682be38571b" },
+    { "path": "chips/bl616/efuse_bootheader/flash_para.bin", "size": 84, "sha256": "002c41f38bb652bdaf89136183aaef70ae11abbf85f554a59d7242748f32e1e0" },
+    { "path": "chips/bl616/img_create/whole_flash_data.bin", "size": 896288, "sha256": "de73a1dd63395088c1cc7d27adcb86d908147ea4f6e71dc5db31c385d3125fd4" },
+    { "path": "chips/bl616/img_create/whole_flash_data.bin.hash", "size": 896320, "sha256": "3c415018a855eff65ce849aaaefc6ca122a563ac66e86245bd96fd66247f8d08" },
+    { "path": "chips/bl616/img_create/whole_img.pack", "size": 898536, "sha256": "45a65524b94a3a99f4aa93f39390bf622f117a083907e60db5bc52aad36708a8" }
+  ],
+  "license": {
+    "spdx": "Apache-2.0",
+    "sourceFileName": "LICENSE",
+    "fileName": "LICENSE.txt",
+    "sha256": "454ec1d833e9da63aaa6f4d3f880c1c0f9ea6b8c77de1e441876f9e2cbf70615",
+    "size": 11366
+  },
+  "distribution": "Unmodified BLFlashCommand 1.4.3 and the hash-pinned BL616-only support subtree from BouffaloSDK. Other chip payloads are intentionally omitted."
+}

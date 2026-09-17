@@ -22,14 +22,21 @@ public sealed record FirmwareArtifactDetails(
 public sealed class FirmwareFlashService
 {
     private readonly Func<string?> _sifliTool;
+    private readonly Func<string?> _bouffaloTool;
     private readonly Func<string[]> _serialPorts;
 
-    public FirmwareFlashService() : this(() => ResolveSifliTool(), SerialPort.GetPortNames) { }
+    public FirmwareFlashService() : this(() => ResolveSifliTool(),
+        SerialPort.GetPortNames, () => ResolveBouffaloTool()) { }
 
     internal FirmwareFlashService(Func<string?> sifliTool, Func<string[]> serialPorts)
+        : this(sifliTool, serialPorts, () => ResolveBouffaloTool()) { }
+
+    internal FirmwareFlashService(Func<string?> sifliTool,
+        Func<string[]> serialPorts, Func<string?> bouffaloTool)
     {
         _sifliTool = sifliTool;
         _serialPorts = serialPorts;
+        _bouffaloTool = bouffaloTool;
     }
 
     public static FirmwareArtifactDetails DescribeArtifact(
@@ -53,6 +60,12 @@ public sealed class FirmwareFlashService
                         file.GetProperty("path").GetString()!)).ToArray();
                 main = files.Single(file => Path.GetFileName(file).Equals(
                     "main.bin", StringComparison.OrdinalIgnoreCase));
+            }
+            else if (firmware.FlashMethod == FirmwareFlashMethod.BouffaloUart)
+            {
+                var bundle = ReadBouffaloBundle(artifact);
+                files = bundle.Files.Select(file => file.Path).ToArray();
+                main = bundle.Files.Single(file => file.Kind == "firmware").Path;
             }
             using var input = File.OpenRead(main);
             return new(true, "已内置固件", files.Length,
@@ -91,6 +104,7 @@ public sealed class FirmwareFlashService
         {
             FirmwareFlashMethod.PicoUf2 => CheckPico(artifact),
             FirmwareFlashMethod.SifliSerial => CheckSifli(artifact, serialPort),
+            FirmwareFlashMethod.BouffaloUart => CheckBouffalo(artifact, serialPort),
             _ => new(false, "该固件模块没有提供自动烧录方式。", artifact, null)
         };
     }
@@ -113,6 +127,8 @@ public sealed class FirmwareFlashService
             FirmwareFlashMethod.PicoUf2 => await FlashPicoAsync(
                 check.ArtifactPath, check.Target!, progress, cancellationToken),
             FirmwareFlashMethod.SifliSerial => await FlashSifliAsync(
+                check.ArtifactPath, serialPort!, progress, cancellationToken),
+            FirmwareFlashMethod.BouffaloUart => await FlashBouffaloAsync(
                 check.ArtifactPath, serialPort!, progress, cancellationToken),
             _ => new(false, "该固件模块没有提供自动烧录方式。")
         };
@@ -211,7 +227,148 @@ public sealed class FirmwareFlashService
                         throw new InvalidDataException("烧录包必须包含一个 main.bin。");
                 }
                 break;
+            case FirmwareFlashMethod.BouffaloUart:
+                _ = ReadBouffaloBundle(artifact);
+                break;
         }
+    }
+
+    private FirmwareFlashPreflight CheckBouffalo(string artifact,
+                                                  string? serialPort)
+    {
+        if (string.IsNullOrWhiteSpace(serialPort))
+            return new(false, "请选择已处于下载模式的 BL616 串口。", artifact, null);
+        if (!_serialPorts().Contains(serialPort, StringComparer.OrdinalIgnoreCase))
+            return new(false, $"Windows 当前没有枚举到 {serialPort}，请刷新串口。",
+                artifact, serialPort);
+        var tool = _bouffaloTool();
+        if (tool is null)
+            return new(false,
+                "未找到 BLFlashCommand。请安装包含 Bouffalo 烧录工具的完整应用包。",
+                artifact, serialPort);
+        try
+        {
+            ValidateArtifactBundle(FirmwareFlashMethod.BouffaloUart, artifact);
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or
+                                   InvalidDataException or InvalidOperationException or
+                                   UnauthorizedAccessException or ArgumentException)
+        {
+            return new(false, $"BL616 固件包校验失败：{ex.Message}", artifact,
+                serialPort);
+        }
+        return new(true,
+            $"{serialPort} · BL616 文件及 SHA-256 校验通过 · 请确认设备已进入下载模式 · 烧录工具：{tool}",
+            artifact, serialPort);
+    }
+
+    private async Task<FirmwareFlashResult> FlashBouffaloAsync(
+        string manifestPath,
+        string serialPort,
+        IProgress<string>? progress,
+        CancellationToken cancellationToken)
+    {
+        var bundle = ReadBouffaloBundle(manifestPath);
+        var executable = _bouffaloTool() ??
+            throw new FileNotFoundException("BLFlashCommand was not found.");
+        var configPath = Path.Combine(Path.GetTempPath(),
+            $"controller-bridge-bl616-{Guid.NewGuid():N}.ini");
+        try
+        {
+            await File.WriteAllTextAsync(configPath, BuildBouffaloConfig(bundle),
+                cancellationToken);
+            var start = new ProcessStartInfo(executable)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = Path.GetDirectoryName(manifestPath)!
+            };
+            start.ArgumentList.Add("--interface=uart");
+            start.ArgumentList.Add($"--baudrate={bundle.BaudRate}");
+            start.ArgumentList.Add($"--port={serialPort}");
+            start.ArgumentList.Add($"--chipname={bundle.Chip}");
+            start.ArgumentList.Add($"--config={configPath}");
+            // BLFlashCommand --reset leaves this board in ROM download mode;
+            // --warm_reset is the path that starts the freshly written image.
+            start.ArgumentList.Add("--warm_reset");
+            progress?.Report($"正在通过 {serialPort} 以 {bundle.BaudRate:N0} baud 写入 BL616...");
+            var result = await RunProcessAsync(start, cancellationToken);
+            var output = $"{result.Output}\n{result.Error}";
+            if (result.ExitCode != 0 ||
+                !output.Contains("Flash writing succeeded", StringComparison.OrdinalIgnoreCase) &&
+                !output.Contains("programming completed", StringComparison.OrdinalIgnoreCase))
+                return new(false,
+                    $"BLFlashCommand 失败（{result.ExitCode}）：{output.Trim()}");
+        }
+        finally
+        {
+            if (File.Exists(configPath)) File.Delete(configPath);
+        }
+        progress?.Report("BL616 写入完成，已请求热复位并启动新固件。");
+        return new(true, "BL616 固件烧录完成，正在等待 USB 重新枚举。");
+    }
+
+    private sealed record BouffaloFile(string Kind, string Path, string Address);
+    private sealed record BouffaloBundle(string Chip, int BaudRate,
+        IReadOnlyList<BouffaloFile> Files);
+
+    private static BouffaloBundle ReadBouffaloBundle(string manifestPath)
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
+        var root = document.RootElement;
+        if (root.GetProperty("schemaVersion").GetInt32() != 1 ||
+            !root.GetProperty("chip").GetString()!.Equals("bl616",
+                StringComparison.OrdinalIgnoreCase) ||
+            root.GetProperty("baudRate").GetInt32() != 2_000_000)
+            throw new InvalidDataException("目标必须是 BL616 和 2,000,000 baud。");
+        var files = new List<BouffaloFile>();
+        foreach (var item in root.GetProperty("files").EnumerateArray())
+        {
+            var kind = item.GetProperty("kind").GetString()?.ToLowerInvariant() ?? "";
+            var relative = item.GetProperty("path").GetString() ?? "";
+            var address = item.GetProperty("address").GetString()?.ToLowerInvariant() ?? "";
+            var expectedHash = item.GetProperty("sha256").GetString()?.ToLowerInvariant() ?? "";
+            var path = ResolvePackageFile(manifestPath, relative);
+            if (new FileInfo(path).Length is <= 0 or > 4_194_304)
+                throw new InvalidDataException($"{relative} 文件大小无效。");
+            using var input = File.OpenRead(path);
+            var actualHash = Convert.ToHexString(SHA256.HashData(input)).ToLowerInvariant();
+            if (expectedHash.Length != 64 || actualHash != expectedHash)
+                throw new InvalidDataException($"{relative} 的 SHA-256 不匹配。");
+            files.Add(new(kind, path, address));
+        }
+        if (files.Count != 3 || files.Select(file => file.Kind).Distinct().Count() != 3 ||
+            files.Count(file => file.Kind == "boot2" && file.Address == "0x000000") != 1 ||
+            files.Count(file => file.Kind == "partition" && file.Address == "0x00e000") != 1 ||
+            files.Count(file => file.Kind == "firmware" && file.Address == "@partition") != 1)
+            throw new InvalidDataException("烧录包必须包含唯一的 boot2、partition 和 firmware。");
+        return new("bl616", 2_000_000, files);
+    }
+
+    private static string ResolvePackageFile(string manifestPath, string relative)
+    {
+        relative = relative.Replace('/', Path.DirectorySeparatorChar);
+        if (Path.IsPathRooted(relative) || relative.Split(Path.DirectorySeparatorChar,
+                StringSplitOptions.RemoveEmptyEntries).Contains(".."))
+            throw new InvalidDataException("固件文件路径无效。");
+        var root = Path.GetFullPath(Path.GetDirectoryName(manifestPath)!);
+        var path = Path.GetFullPath(Path.Combine(root, relative));
+        if (!path.StartsWith(root + Path.DirectorySeparatorChar,
+                StringComparison.OrdinalIgnoreCase) || !File.Exists(path))
+            throw new InvalidDataException($"固件文件缺失：{relative}");
+        return path;
+    }
+
+    private static string BuildBouffaloConfig(BouffaloBundle bundle)
+    {
+        var boot2 = bundle.Files.Single(file => file.Kind == "boot2");
+        var partition = bundle.Files.Single(file => file.Kind == "partition");
+        var firmware = bundle.Files.Single(file => file.Kind == "firmware");
+        static string P(string path) => path.Replace('\\', '/');
+        return $"[cfg]\nerase = 1\nskip_mode = 0x0, 0x0\nboot2_isp_mode = 0\n\n" +
+               $"[boot2]\nfiledir = {P(boot2.Path)}\naddress = {boot2.Address}\n\n" +
+               $"[partition]\nfiledir = {P(partition.Path)}\naddress = {partition.Address}\n\n" +
+               $"[FW]\nfiledir = {P(firmware.Path)}\naddress = {firmware.Address}\n";
     }
 
     private static FirmwareFlashPreflight CheckPico(string artifact)
@@ -530,6 +687,21 @@ public sealed class FirmwareFlashService
         var bundled = Path.Combine(applicationDirectory ?? AppContext.BaseDirectory,
             "tools", "sftool", "sftool.exe");
         return File.Exists(bundled) ? bundled : FindExecutable("sftool");
+    }
+
+    public static string? ResolveBouffaloTool(string? applicationDirectory = null)
+    {
+        var baseDirectory = applicationDirectory ?? AppContext.BaseDirectory;
+        var bundled = Path.Combine(baseDirectory, "tools", "blflash",
+            "BLFlashCommand.exe");
+        if (File.Exists(bundled)) return bundled;
+        var configured = Environment.GetEnvironmentVariable("BRIDGE_MANAGER_BLFLASH");
+        if (!string.IsNullOrWhiteSpace(configured) && File.Exists(configured))
+            return Path.GetFullPath(configured);
+        var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        var sdkTool = Path.Combine(documents, "controllerbridge", "bouffalo_sdk",
+            "tools", "bflb_tools", "bouffalo_flash_cube", "BLFlashCommand.exe");
+        return File.Exists(sdkTool) ? sdkTool : FindExecutable("BLFlashCommand");
     }
 
     private static string? FindExecutable(string name)

@@ -48,6 +48,11 @@ $requiredFiles = @(
     'LICENSE',
     'firmware-releases.lock.json',
     'modules\esp32s3-ns2-bridge\module.json',
+    'modules\bl616-unified\module.json',
+    'modules\bl616-unified\artifacts\blflash.json',
+    'modules\bl616-unified\artifacts\boot2_bl616_isp_release_v8.1.8.bin',
+    'modules\bl616-unified\artifacts\partition.bin',
+    'modules\bl616-unified\artifacts\controllerbridge_bl616_bl616.bin',
     'modules\sf32-unified\module.json',
     'modules\sf32-unified\artifacts\sftool_param.json',
     'modules\sf32-unified\artifacts\bootloader\output\bootloader.bin',
@@ -58,6 +63,9 @@ $requiredFiles = @(
     'tools\sftool\sftool.exe',
     'tools\sftool\LICENSE.txt',
     'tools\sftool\PROVENANCE.json',
+    'tools\blflash\BLFlashCommand.exe',
+    'tools\blflash\LICENSE.txt',
+    'tools\blflash\PROVENANCE.json',
     'SHA256SUMS.txt'
 )
 foreach ($file in $requiredFiles) {
@@ -91,6 +99,31 @@ $expectedMethods = @{
     'esp32s3-ns2-bridge' = 'None'
     'sf32-unified' = 'SifliSerial'
     'pico-unified-bridge' = 'PicoUf2'
+}
+$blModuleRoot = Join-Path $root 'modules\bl616-unified'
+$blManifest = Get-Content -LiteralPath (Join-Path $blModuleRoot 'module.json') `
+    -Raw -Encoding UTF8 | ConvertFrom-Json
+$blFirmware = @($blManifest.firmware | Where-Object {
+    $_.flashMethod -eq 'BouffaloUart'
+})
+if ($blManifest.id -ne 'bl616-unified' -or $blFirmware.Count -ne 1) {
+    throw 'Invalid bundled BL616 firmware manifest.'
+}
+$blBundlePath = Get-ContainedFile -BasePath $blModuleRoot `
+    -RelativePath $blFirmware[0].artifactRelativePath
+$blBundle = Get-Content -LiteralPath $blBundlePath -Raw -Encoding UTF8 |
+    ConvertFrom-Json
+if ($blBundle.schemaVersion -ne 1 -or $blBundle.chip -ne 'bl616' -or
+    $blBundle.baudRate -ne 2000000 -or @($blBundle.files).Count -ne 3) {
+    throw 'Invalid bundled BL616 flash bundle.'
+}
+$blArtifactRoot = Split-Path -Parent $blBundlePath
+foreach ($filePin in $blBundle.files) {
+    $file = Get-ContainedFile -BasePath $blArtifactRoot -RelativePath $filePin.path
+    if ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash -ne
+        $filePin.sha256) {
+        throw "BL616 firmware SHA256 mismatch: $($filePin.path)"
+    }
 }
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 foreach ($moduleId in @('esp32s3-ns2-bridge', 'sf32-unified', 'pico-unified-bridge')) {
@@ -206,6 +239,32 @@ if ($LASTEXITCODE -ne 0 -or $versionOutput -cne $pin.executable.versionOutput) {
     throw "Expected '$($pin.executable.versionOutput)', got '$versionOutput'."
 }
 Write-Host "Verified bundled $versionOutput ($($pin.target), $($pin.license.spdx))."
+
+$blPinnedProvenance = Join-Path $PSScriptRoot 'vendor\blflash\PROVENANCE.json'
+$blPin = Get-Content -LiteralPath $blPinnedProvenance -Raw -Encoding UTF8 |
+    ConvertFrom-Json
+$blToolRoot = Join-Path $root 'tools\blflash'
+if ((Get-FileHash -LiteralPath (Join-Path $blToolRoot 'PROVENANCE.json') `
+        -Algorithm SHA256).Hash -ne
+    (Get-FileHash -LiteralPath $blPinnedProvenance -Algorithm SHA256).Hash) {
+    throw 'Bundled BLFlash provenance does not match the repository pin.'
+}
+foreach ($filePin in @($blPin.executable, $blPin.license) + @($blPin.supportFiles)) {
+    $relative = if ($filePin -eq $blPin.license) { $filePin.fileName }
+        elseif ($filePin -eq $blPin.executable) { $filePin.fileName }
+        else { $filePin.path }
+    $file = Get-ContainedFile -BasePath $blToolRoot -RelativePath $relative
+    if ((Get-Item -LiteralPath $file).Length -ne $filePin.size -or
+        (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash -ne $filePin.sha256) {
+        throw "Pinned BLFlash size/SHA256 mismatch: $relative"
+    }
+}
+$blHelp = (& (Join-Path $blToolRoot $blPin.executable.fileName) --help 2>&1 |
+    Out-String)
+if ($LASTEXITCODE -ne 0 -or -not $blHelp.Contains('chipname')) {
+    throw 'Bundled BLFlashCommand did not pass its read-only help check.'
+}
+Write-Host "Verified bundled BLFlashCommand $($blPin.version) (BL616-only, $($blPin.license.spdx))."
 
 if ($LaunchSmoke) {
     $process = Start-Process `

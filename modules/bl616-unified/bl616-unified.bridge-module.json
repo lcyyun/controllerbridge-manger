@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "runtimeApiVersion": 2,
+  "id": "bl616-unified",
+  "moduleVersion": "0.1.0",
+  "displayName": "ControllerBridge BL616",
+  "boardFamily": "Bouffalo Lab BL616",
+  "description": "BL616 上统一接收 DualSense 与 Nintendo NS2Pro。",
+  "priority": 110,
+  "capabilities": "DeviceStatus, LiveInput, UsbRoleSelection, WirelessControllers, Rumble, UsbAudio, Motion, Settings, SelfTest, RawCommands, FirmwareFlashing",
+  "matchAny": [
+    { "profileKeys": ["bl616-xbox360", "bl616-dualsense", "bl616-dualsense-edge", "bl616-ns2pro-nintendo"] }
+  ],
+  "hidDevices": [
+    {
+      "key": "bl616-xbox360", "displayName": "BL616 Xbox 360 Manager",
+      "vendorId": 1118, "productId": 654,
+      "managerUsagePage": 65280, "managerUsageId": 1,
+      "managerFeatureReportId": 127, "usbRole": "Xbox",
+      "managerSerialNumber": "BL616X360", "tags": ["bl616", "xbox360"]
+    },
+    {
+      "key": "bl616-dualsense", "displayName": "BL616 DualSense Manager",
+      "vendorId": 1356, "productId": 3302,
+      "managerUsagePage": 1, "managerUsageId": 5,
+      "managerFeatureReportId": 246, "usbRole": "DualSense",
+      "managerSerialNumber": "ControllerBridge BL616",
+      "tags": ["bl616", "ds5", "dualsense"], "supportsInputReports": true
+    },
+    {
+      "key": "bl616-dualsense-edge", "displayName": "BL616 DualSense Edge Manager",
+      "vendorId": 1356, "productId": 3570,
+      "managerUsagePage": 1, "managerUsageId": 5,
+      "managerFeatureReportId": 246, "usbRole": "DualSenseEdge",
+      "managerSerialNumber": "ControllerBridge BL616 Edge",
+      "tags": ["bl616", "ds5", "dse"], "supportsInputReports": true
+    },
+    {
+      "key": "bl616-ns2pro-nintendo", "displayName": "BL616 NS2Pro Manager",
+      "vendorId": 1406, "productId": 8297,
+      "managerUsagePage": 65280, "managerUsageId": 1,
+      "managerFeatureReportId": 127, "commandOutputReportId": 2,
+      "usbRole": "NintendoNs2Pro", "managerSerialNumber": "CB616NS2-0002",
+      "tags": ["bl616", "ns2pro"], "supportsInputReports": true
+    }
+  ],
+  "boards": [
+    {
+      "id": "bl616-devkit", "displayName": "Bouffalo Lab BL616",
+      "family": "BL616",
+      "description": "ControllerBridge BL616 接收器。"
+    }
+  ],
+  "firmware": [
+    {
+      "id": "bl616-unified-current", "displayName": "ControllerBridge BL616",
+      "version": "0.1.0",
+      "description": "DS5 Classic、NS2Pro BLE、震动、扳机与 USB Audio。",
+      "boardIds": ["bl616-devkit"], "flashMethod": "BouffaloUart",
+      "artifactRelativePath": "artifacts/blflash.json",
+      "flashHint": "先让 BL616 进入 UART 下载模式，再选择其下载串口，以 2,000,000 baud 校验写入。"
+    }
+  ],
+  "usbRoles": [
+    { "role": "Xbox", "displayName": "Xbox 360", "description": "XInput 身份", "command": "role set xbox" },
+    { "role": "DualSense", "displayName": "DualSense", "description": "音频、震动与触觉", "command": "role set ds5" },
+    { "role": "DualSenseEdge", "displayName": "DualSense Edge", "description": "Edge 身份", "command": "role set dse" },
+    { "role": "NintendoNs2Pro", "displayName": "Nintendo NS2Pro", "description": "原生 Nintendo 身份", "command": "role set ns2pro" }
+  ],
+  "inputSources": [],
+  "wirelessControllers": [
+    {
+      "id": "ds5", "displayName": "DualSense / DualSense Edge",
+      "transportLabel": "Bluetooth Classic", "pairCommand": "pair ds5",
+      "connectCommand": "connect ds5", "disconnectCommand": "disconnect ds5",
+      "forgetCommand": "forget ds5"
+    },
+    {
+      "id": "ns2", "displayName": "Nintendo NS2Pro",
+      "transportLabel": "Bluetooth LE", "pairCommand": "pair ns2",
+      "connectCommand": "connect ns2", "disconnectCommand": "disconnect ns2",
+      "forgetCommand": "forget ns2"
+    }
+  ],
+  "statusCommands": ["bridge status", "usb status", "settings", "rumble"],
+  "selfTestCommands": ["bridge status", "usb status", "settings", "rumble", "bridge input", "motion status", "ns2 status"],
+  "primaryStatusCommand": "bridge status",
+  "inputStatusCommand": "bridge input",
+  "saveSettingsCommand": "settings save",
+  "settingsCommandTemplates": [
+    "rumble tune {rumbleScalePercent} {rumbleHoldMs} {rumbleTickMs} {rumbleStopPackets}",
+    "usb rate {reportRateHz}", "usb raw {usbRaw}", "web parse {liveParsing}"
+  ],
+  "rumbleCommandTemplate": "rumble test {target}"
+}

@@ -89,6 +89,7 @@ public sealed class BridgeFirmwareModuleRegistry
     private static IEnumerable<IBridgeFirmwareModule> CreateBuiltIns()
     {
         yield return new Sf32UnifiedFirmwareModule();
+        yield return new Bl616UnifiedFirmwareModule();
         yield return new Esp32S3Ns2BridgeFirmwareModule();
         yield return new PicoUnifiedFirmwareModule();
         yield return new GenericManagerFirmwareModule();

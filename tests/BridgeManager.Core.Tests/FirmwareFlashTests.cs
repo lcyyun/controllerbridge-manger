@@ -65,6 +65,45 @@ internal static class FirmwareFlashTests
             Require(!service.Check(module, firmware, "COM7").Ready, "Empty main.bin accepted");
             Require(!FirmwareFlashService.DescribeArtifact(module, firmware).Available,
                 "Invalid bundled image advertised as available");
+
+            var blRoot = Path.Combine(root, "bl616");
+            Directory.CreateDirectory(blRoot);
+            var blFiles = new[]
+            {
+                ("boot2", "boot2.bin", "0x000000", new byte[] { 1, 2, 3 }),
+                ("partition", "partition.bin", "0x00e000", new byte[] { 4, 5 }),
+                ("firmware", "firmware.bin", "@partition", new byte[] { 6, 7, 8, 9 })
+            };
+            foreach (var file in blFiles)
+                File.WriteAllBytes(Path.Combine(blRoot, file.Item2), file.Item4);
+            var blManifest = Path.Combine(blRoot, "blflash.json");
+            void WriteBlManifest(string chip = "bl616", bool corruptHash = false) =>
+                File.WriteAllText(blManifest, JsonSerializer.Serialize(new
+                {
+                    schemaVersion = 1, chip, baudRate = 2_000_000,
+                    files = blFiles.Select((file, index) => new
+                    {
+                        kind = file.Item1, path = file.Item2, address = file.Item3,
+                        sha256 = corruptHash && index == 2 ? new string('0', 64) :
+                            Convert.ToHexString(SHA256.HashData(file.Item4)).ToLowerInvariant()
+                    })
+                }));
+            WriteBlManifest();
+            var blFirmware = new BridgeFirmwareDefinition("bl", "bl", "1.0", "",
+                ["bl616"], FirmwareFlashMethod.BouffaloUart,
+                "bl616/blflash.json", "");
+            var blService = new FirmwareFlashService(() => null, () => ["COM8"],
+                () => "BLFlashCommand.exe");
+            Require(blService.Check(module, blFirmware, "COM8").Ready,
+                "Valid BL616 bundle and enumerated bridge were rejected");
+            Require(FirmwareFlashService.DescribeArtifact(module, blFirmware).Available,
+                "Valid BL616 bundle was not advertised");
+            WriteBlManifest(corruptHash: true);
+            Require(!blService.Check(module, blFirmware, "COM8").Ready,
+                "BL616 image with the wrong hash was accepted");
+            WriteBlManifest(chip: "bl618");
+            Require(!blService.Check(module, blFirmware, "COM8").Ready,
+                "BL616 flasher accepted a different chip target");
             var unsupported = firmware with { FlashMethod = FirmwareFlashMethod.None, ArtifactRelativePath = null };
             Require(!FirmwareFlashService.DescribeArtifact(module, unsupported).Available,
                 "Management-only firmware advertised as bundled");

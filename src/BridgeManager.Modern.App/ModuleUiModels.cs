@@ -62,6 +62,11 @@ public sealed record WizardApplyRequest(
 
 public sealed record WizardApplyResult(bool Applied, string Message);
 
+public sealed record FirmwarePortItem(
+    string PortName,
+    string DisplayName,
+    bool IsBl616DownloadPort);
+
 public sealed record DetectedSetupDeviceItem(
     DeviceDescriptor Descriptor,
     BridgeBoardDefinition? Board,

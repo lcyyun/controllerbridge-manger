@@ -60,6 +60,7 @@ public sealed partial class MainWindow
             () => _moduleRegistry.GetHidDeviceProfiles());
         _module = _moduleRegistry.Fallback;
         InitializeComponent();
+        MainNavigation.SizeChanged += MainNavigation_SizeChanged;
         _dynamicPageRenderer = new DynamicModulePageRenderer(
             ExecuteModuleOperationAsync, ShowStatus);
         InitializeIndependentInput();
@@ -69,11 +70,13 @@ public sealed partial class MainWindow
         Closed += MainWindow_Closed;
         AppWindow.Closing += (_, args) =>
         {
-            if (_setupWizardWindow?.IsFlashing != true) return;
+            if (_setupWizardWindow?.IsFlashing != true && !_firmwareFlashBusy) return;
             args.Cancel = true;
             ShowStatus("固件烧录尚未结束，请保持连接并等待结果。", true);
         };
         InitializeModuleUi();
+        InitializeFirmwarePage();
+        InitializeManagerUpdate();
         MainNavigation.SelectedItem = HomeNavItem;
         ShowPage("home");
         if (_discoverDevices)
@@ -81,7 +84,7 @@ public sealed partial class MainWindow
             _ = RefreshDevicesAsync();
             _ = RefreshInputSourcesAsync();
         }
-        if (_discoverDevices && !SetupWizardWindow.HasCompletedSetup())
+        if (_discoverDevices && SetupWizardWindow.ShouldShowOnStartup())
         {
             DispatcherQueue.TryEnqueue(OpenSetupWizard);
         }
@@ -158,6 +161,7 @@ public sealed partial class MainWindow
             ShowStatus(descriptor.DiagnosticOnly
                 ? "串口诊断已连接。实时输入仍需使用 USB HID。"
                 : reconnecting ? "USB HID 已在重枚举后自动恢复。" : "USB HID 已连接，可以开始完整功能测试。", false);
+            RefreshFirmwareTargets();
             await RefreshStatusWithRetryAsync(logCommand: true);
             _pollTimer.Start();
             return true;
@@ -264,6 +268,7 @@ public sealed partial class MainWindow
         HomePage.Visibility = page == "home" ? Visibility.Visible : Visibility.Collapsed;
         InputPage.Visibility = page == "input" ? Visibility.Visible : Visibility.Collapsed;
         FeedbackPage.Visibility = page == "feedback" ? Visibility.Visible : Visibility.Collapsed;
+        FirmwarePage.Visibility = page == "firmware" ? Visibility.Visible : Visibility.Collapsed;
         AdvancedPage.Visibility = page == "advanced" ? Visibility.Visible : Visibility.Collapsed;
         var modulePage = page.StartsWith("module:", StringComparison.Ordinal);
         DynamicModulePage.Visibility = modulePage
@@ -272,6 +277,7 @@ public sealed partial class MainWindow
         {
             "input" => ("手柄测试", "本机手柄与接收器输入"),
             "feedback" => ("震动与音频", "反馈测试与触觉状态"),
+            "firmware" => ("固件更新", "GitHub 更新源、镜像校验与安全烧录"),
             "advanced" => ("高级诊断", "设备选择、检查结果与原始数据"),
             _ when modulePage => DynamicPageTitle(page["module:".Length..]),
             _ => ("概览", "设备、角色与无线连接")
@@ -315,6 +321,7 @@ public sealed partial class MainWindow
                 _ = RefreshDevicesAsync();
             }, prepareFlashAsync: DisconnectAsync);
         _setupWizardWindow = window;
+        SetupWizardOwnership.SetOwner(window, this);
         window.Closed += (_, _) =>
         {
             if (ReferenceEquals(_setupWizardWindow, window))
@@ -336,6 +343,7 @@ public sealed partial class MainWindow
             ? _moduleRegistry.Find(previousModuleId) ?? _moduleRegistry.Fallback
             : _moduleRegistry.Resolve(_lastDescriptor);
         InitializeModuleUi();
+        RefreshFirmwareTargets();
         ShowStatus(
             $"已安装单文件兼容包 {installed.ModuleId} {installed.ModuleVersion}。",
             false);
@@ -904,6 +912,7 @@ public sealed partial class MainWindow
         _lastDescriptor = null;
         _expectedRole = BridgeUsbRole.Unknown;
         await CloseTransportAsync(clearSummary: true);
+        RefreshFirmwareTargets();
         ShowStatus("管理连接已断开。", false);
     }
 
@@ -1014,25 +1023,23 @@ public sealed partial class MainWindow
         if (Directory.Exists(packagedModules))
         {
             yield return packagedModules;
-            yield break;
         }
-
-        var cursor = new DirectoryInfo(AppContext.BaseDirectory);
-        while (cursor is not null)
+        else
         {
-            var sourceModules = Path.Combine(cursor.FullName, "apps",
-                "BridgeManager", "modules");
-            if (Directory.Exists(sourceModules))
+            var cursor = new DirectoryInfo(AppContext.BaseDirectory);
+            while (cursor is not null)
             {
-                yield return sourceModules;
-                break;
+                var sourceModules = Path.Combine(cursor.FullName, "modules");
+                if (Directory.Exists(sourceModules))
+                {
+                    yield return sourceModules;
+                    break;
+                }
+                cursor = cursor.Parent;
             }
-            cursor = cursor.Parent;
         }
-
-        // External module installation is intentionally not part of the current
-        // product surface. The package loader remains available for first-party
-        // release tooling and can be enabled later with an explicit policy.
+        if (Directory.Exists(InstalledModuleRoot))
+            yield return InstalledModuleRoot;
     }
 
     private static string InstalledModuleRoot => Path.Combine(

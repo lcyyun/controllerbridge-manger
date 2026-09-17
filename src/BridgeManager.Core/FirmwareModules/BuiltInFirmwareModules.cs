@@ -170,6 +170,102 @@ public sealed class Sf32UnifiedFirmwareModule : BridgeFirmwareModuleBase
         ManagerCommands.RumbleTest(target);
 }
 
+public sealed class Bl616UnifiedFirmwareModule : BridgeFirmwareModuleBase
+{
+    private static readonly IReadOnlyList<BridgeBoardDefinition> KnownBoards =
+    [
+        new("bl616-devkit", "Bouffalo Lab BL616", "BL616",
+            "ControllerBridge BL616 接收器，支持 DualSense 与 NS2Pro。")
+    ];
+
+    public override string Id => "bl616-unified";
+    public override string DisplayName => "ControllerBridge BL616";
+    public override string BoardFamily => "Bouffalo Lab BL616";
+    public override string Description =>
+        "BL616 上统一接收 DualSense 与 Nintendo NS2Pro。";
+    public override int Priority => 110;
+    public override BridgeCapability Capabilities =>
+        BridgeCapability.DeviceStatus |
+        BridgeCapability.LiveInput |
+        BridgeCapability.UsbRoleSelection |
+        BridgeCapability.WirelessControllers |
+        BridgeCapability.Rumble |
+        BridgeCapability.UsbAudio |
+        BridgeCapability.Motion |
+        BridgeCapability.Settings |
+        BridgeCapability.SelfTest |
+        BridgeCapability.RawCommands |
+        BridgeCapability.FirmwareFlashing;
+    public override IReadOnlyList<BridgeBoardDefinition> Boards => KnownBoards;
+    public override IReadOnlyList<BridgeFirmwareDefinition> Firmware =>
+    [
+        new("bl616-unified-current", "ControllerBridge BL616", "0.1.0",
+            "DS5 Classic、NS2Pro BLE、震动、扳机与 USB Audio。",
+            ["bl616-devkit"], FirmwareFlashMethod.BouffaloUart,
+            "modules/bl616-unified/artifacts/blflash.json",
+            "先让 BL616 进入 UART 下载模式，再选择其下载串口，以 2,000,000 baud 校验写入。")
+    ];
+    public override IReadOnlyList<BridgeDeviceProfile> HidDevices =>
+    [
+        BridgeDeviceProfiles.Bl616Xbox360,
+        BridgeDeviceProfiles.Bl616DualSense,
+        BridgeDeviceProfiles.Bl616DualSenseEdge,
+        BridgeDeviceProfiles.Bl616NintendoNs2Pro
+    ];
+    public override IReadOnlyList<BridgeUsbRoleOption> UsbRoles =>
+    [
+        Role(BridgeUsbRole.Xbox, "Xbox 360 / XInput 身份"),
+        Role(BridgeUsbRole.DualSense, "DualSense 音频、震动与触觉"),
+        Role(BridgeUsbRole.DualSenseEdge, "DualSense Edge 身份"),
+        Role(BridgeUsbRole.NintendoNs2Pro, "原生 Nintendo 身份")
+    ];
+    /* Firmware searches both controller families automatically and accepts
+     * only the first connection, so no misleading input-source selector. */
+    public override IReadOnlyList<BridgeInputSourceOption> InputSources => [];
+    public override IReadOnlyList<BridgeWirelessControllerOption> WirelessControllers =>
+    [
+        new("ds5", "DualSense / DualSense Edge", "Bluetooth Classic",
+            ManagerCommands.Pair("ds5"), ManagerCommands.Connect("ds5"),
+            ManagerCommands.Disconnect("ds5"), ManagerCommands.Forget("ds5")),
+        new("ns2", "Nintendo NS2Pro", "Bluetooth LE",
+            ManagerCommands.Pair("ns2"), ManagerCommands.Connect("ns2"),
+            ManagerCommands.Disconnect("ns2"), ManagerCommands.Forget("ns2"))
+    ];
+    public override IReadOnlyList<string> StatusCommands =>
+    [
+        ManagerCommands.BridgeStatus, ManagerCommands.UsbStatus,
+        ManagerCommands.Settings, ManagerCommands.RumbleStatus
+    ];
+    public override IReadOnlyList<string> SelfTestCommands =>
+    [
+        ManagerCommands.BridgeStatus, ManagerCommands.UsbStatus,
+        ManagerCommands.Settings, ManagerCommands.RumbleStatus,
+        ManagerCommands.BridgeInput, ManagerCommands.MotionStatus,
+        ManagerCommands.Ns2Status
+    ];
+    public override string PrimaryStatusCommand => ManagerCommands.BridgeStatus;
+    public override string InputStatusCommand => ManagerCommands.BridgeInput;
+    public override string? SaveSettingsCommand => ManagerCommands.SaveSettings;
+
+    public override bool Matches(DeviceDescriptor descriptor) =>
+        descriptor.ProfileKey is "bl616-xbox360" or "bl616-dualsense" or
+            "bl616-dualsense-edge" or "bl616-ns2pro-nintendo";
+
+    public override IReadOnlyList<string> BuildSettingsCommands(
+        BridgeModuleSettings settings) =>
+    [
+        ManagerCommands.RumbleTune(settings.RumbleScalePercent,
+            settings.RumbleHoldMs, settings.RumbleTickMs,
+            settings.RumbleStopPackets),
+        ManagerCommands.UsbRate(settings.ReportRateHz),
+        ManagerCommands.UsbRaw(settings.UsbRawPassthrough),
+        ManagerCommands.WebParse(settings.LiveParsing)
+    ];
+
+    public override string? BuildRumbleCommand(string target) =>
+        ManagerCommands.RumbleTest(target);
+}
+
 public sealed class Esp32S3Ns2BridgeFirmwareModule : BridgeFirmwareModuleBase
 {
     private static readonly IReadOnlyList<BridgeBoardDefinition> KnownBoards =

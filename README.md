@@ -9,12 +9,19 @@ Windows desktop manager for ControllerBridge receivers.
 - Independent Windows Gamepad and native DualSense input testing.
 - Light/dark interface and simplified controller illustrations.
 
-The maintained receiver targets are ESP32-S3, SF32LB52 and Pico 2 W. Available
-controls depend on the connected firmware. BL616 is not implemented.
+The maintained receiver targets are BL616, ESP32-S3, SF32LB52 and Pico 2 W.
+Available controls depend on the connected firmware. BL616 is identified
+independently in Xbox 360, DualSense, DualSense Edge and Nintendo NS2Pro modes;
+its native ROM download port is supported by the Manager firmware page.
 
-SF32LB52-DevKit-Nano and Pico 2 W firmware are included in complete application
-packages. SF32 flashing uses the bundled sftool; Pico uses BOOTSEL/UF2. ESP32-S3
-flashing still uses its platform tools. Flashing requires explicit confirmation.
+BL616 and SF32LB52-DevKit-Nano firmware are included in complete application
+packages. BL616 flashing uses the chip's native ROM download port and the bundled
+BLFlashCommand; SF32 flashing uses the bundled sftool. Pico uses BOOTSEL/UF2 and
+ESP32-S3 still uses its platform tools. Flashing requires explicit confirmation.
+
+Firmware updates have their own page, separate from the setup wizard. The first
+update source is GitHub Releases; downloaded module packages are validated before
+installation. The page only offers Manager-integrated BL616 and SF32 targets.
 
 Native NS2Pro initialization and direct-PC rumble are not implemented by the
 independent input tester. Receiver-based input and rumble use their existing

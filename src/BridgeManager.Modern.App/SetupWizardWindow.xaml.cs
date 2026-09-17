@@ -26,6 +26,7 @@ public sealed partial class SetupWizardWindow
     private readonly Func<Task> _prepareFlashAsync;
     private readonly bool _discoverDevices;
     private bool _flashBusy;
+    private bool _startupPreferenceLoaded;
     public bool IsFlashing => _flashBusy;
     private int _wizardStep = 1;
     private BridgeBoardDefinition? _wizardBoard;
@@ -63,8 +64,11 @@ public sealed partial class SetupWizardWindow
         _prepareFlashAsync = prepareFlashAsync ?? (() => Task.CompletedTask);
         _discoverDevices = discoverDevices;
         InitializeComponent();
+        WizardLayout.SizeChanged += WizardLayout_SizeChanged;
         AppWindow.Resize(new SizeInt32(1040, 760));
         InitializeWizard();
+        WizardDontShowAgainCheckBox.IsChecked = !ShouldShowOnStartup();
+        _startupPreferenceLoaded = true;
         AppWindow.Closing += (_, args) =>
         {
             if (!_flashBusy) return;
@@ -79,6 +83,31 @@ public sealed partial class SetupWizardWindow
         var state = LoadWizardState();
         return state?.Completed == true || File.Exists(LegacyWizardStatePath);
     }
+
+    public static bool ShouldShowOnStartup()
+    {
+        try { return !File.Exists(StartupPreferencePath) ||
+            File.ReadAllText(StartupPreferencePath).Trim() != "hide"; }
+        catch (IOException) { return true; }
+        catch (UnauthorizedAccessException) { return true; }
+    }
+
+    private void WizardStartupPreference_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_startupPreferenceLoaded || !_discoverDevices) return;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(StartupPreferencePath)!);
+            File.WriteAllText(StartupPreferencePath,
+                WizardDontShowAgainCheckBox.IsChecked == true ? "hide" : "show");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        { ShowStatus($"无法保存向导启动偏好：{ex.Message}", true); }
+    }
+
+    private static string StartupPreferencePath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "ControllerBridge", "wizard-startup-preference.txt");
 
     private void InitializeWizard()
     {
@@ -406,6 +435,7 @@ public sealed partial class SetupWizardWindow
         {
             FirmwareFlashMethod.PicoUf2 => "Pico UF2 / BOOTSEL",
             FirmwareFlashMethod.SifliSerial => "SiFli sftool / 串口",
+            FirmwareFlashMethod.BouffaloUart => "Bouffalo BLFlash / BL616 下载串口",
             _ => "手动烧录"
         };
         WizardFlashHintText.Text = firmware.FlashHint;
@@ -416,8 +446,12 @@ public sealed partial class SetupWizardWindow
         WizardFirmwareHashText.Text = artifact.Available
             ? $"主程序 SHA-256：{artifact.MainSha256}\n文件时间：{artifact.FileTimeUtc?.ToLocalTime():yyyy-MM-dd HH:mm}"
             : "";
-        var tool = firmware.FlashMethod == FirmwareFlashMethod.SifliSerial
-            ? FirmwareFlashService.ResolveSifliTool() : null;
+        var tool = firmware.FlashMethod switch
+        {
+            FirmwareFlashMethod.SifliSerial => FirmwareFlashService.ResolveSifliTool(),
+            FirmwareFlashMethod.BouffaloUart => FirmwareFlashService.ResolveBouffaloTool(),
+            _ => null
+        };
         var bundledTool = Path.Combine(AppContext.BaseDirectory, "tools", "sftool", "sftool.exe");
         WizardFlashToolText.Text = firmware.FlashMethod switch
         {
@@ -425,13 +459,18 @@ public sealed partial class SetupWizardWindow
                 : Path.GetFullPath(tool).Equals(Path.GetFullPath(bundledTool), StringComparison.OrdinalIgnoreCase)
                     ? "烧录工具：App 内置 sftool" : $"烧录工具：{tool}",
             FirmwareFlashMethod.PicoUf2 => "烧录工具：内置 UF2 写入",
+            FirmwareFlashMethod.BouffaloUart => tool is null
+                ? "烧录工具：缺失 BLFlashCommand"
+                : $"烧录工具：{tool}",
             _ => "当前仅支持管理，暂不提供 App 烧录"
         };
         WizardFlashButton.IsEnabled = artifact.Available &&
             firmware.FlashMethod != FirmwareFlashMethod.None &&
-            (firmware.FlashMethod != FirmwareFlashMethod.SifliSerial || tool is not null);
-        WizardPortPanel.Visibility = firmware.FlashMethod ==
-                                   FirmwareFlashMethod.SifliSerial
+            (firmware.FlashMethod is not (FirmwareFlashMethod.SifliSerial or
+                 FirmwareFlashMethod.BouffaloUart) || tool is not null);
+        WizardPortPanel.Visibility = firmware.FlashMethod is
+                                   FirmwareFlashMethod.SifliSerial or
+                                   FirmwareFlashMethod.BouffaloUart
             ? Visibility.Visible : Visibility.Collapsed;
         WizardFlashStatusText.Text = "尚未检查下载连接";
     }
@@ -584,8 +623,14 @@ public sealed partial class SetupWizardWindow
             control.IsEnabled = !busy;
         WizardFlashButton.IsEnabled = !busy && _wizardFirmware?.Artifact.Available == true &&
             _wizardFirmware.Firmware.FlashMethod != FirmwareFlashMethod.None &&
-            (_wizardFirmware.Firmware.FlashMethod != FirmwareFlashMethod.SifliSerial ||
-             FirmwareFlashService.ResolveSifliTool() is not null);
+            (_wizardFirmware.Firmware.FlashMethod switch
+            {
+                FirmwareFlashMethod.SifliSerial =>
+                    FirmwareFlashService.ResolveSifliTool() is not null,
+                FirmwareFlashMethod.BouffaloUart =>
+                    FirmwareFlashService.ResolveBouffaloTool() is not null,
+                _ => true
+            });
         WizardFlashProgress.IsActive = busy;
         WizardFlashProgress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
     }

@@ -1,5 +1,6 @@
 using BridgeManager.Core.FirmwareModules;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 
 namespace BridgeManager.Modern;
 
@@ -9,6 +10,11 @@ public sealed partial class SetupWizardWindow
     {
         SmokeCapture.Require(!_discoverDevices, "Wizard smoke must not discover hardware.");
         Title = "Firmware Wizard UI Test - no device writes";
+        AppWindow.Resize(new Windows.Graphics.SizeInt32(620, 760));
+        await Task.Delay(80);
+        SmokeCapture.Require(WizardSidebar.Visibility == Visibility.Collapsed &&
+            Grid.GetColumn(WizardContent) == 0 && Grid.GetColumnSpan(WizardContent) == 2,
+            "Wizard did not switch to its compact layout.");
         var board = _moduleRegistry.GetBoards().Single(item => item.Id == "sf32lb52-devkit-nano");
         WizardBoardList.SelectedItem = board;
         SmokeCapture.Require(_wizardFirmware?.Firmware.BoardIds.Contains(board.Id) == true,
@@ -36,6 +42,11 @@ public sealed partial class SetupWizardWindow
                 _wizardFirmware!.Module, _wizardFirmware.Firmware, null).Ready,
             "Wizard allowed flashing without a port.");
         await SmokeCapture.SaveAsync((FrameworkElement)Content, output, "firmware-flash.png");
+        AppWindow.Resize(new Windows.Graphics.SizeInt32(1040, 760));
+        await Task.Delay(80);
+        SmokeCapture.Require(WizardSidebar.Visibility == Visibility.Visible &&
+            Grid.GetColumn(WizardContent) == 1,
+            "Wizard did not restore its wide layout.");
         WizardBoardList.SelectedItem = _moduleRegistry.GetBoards().Single(item => item.Id == "esp32s3-n16r8");
         SmokeCapture.Require(!_wizardFirmware!.Artifact.Available && !WizardFlashButton.IsEnabled,
             "ESP32 management metadata advertised a nonexistent bundled image.");

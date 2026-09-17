@@ -130,6 +130,40 @@ public static class BridgeDeviceProfiles
         new[] { "ns2pro", "pico2w", "sf32lb52" })
         { SupportsInputReports = true };
 
+    public static readonly BridgeDeviceProfile Bl616Xbox360 = MicrosoftXbox360 with
+    {
+        Key = "bl616-xbox360",
+        DisplayName = "BL616 Xbox 360 Manager",
+        ManagerSerialNumber = "BL616X360",
+        Tags = ["bl616", "xbox360", "xinput"]
+    };
+
+    public static readonly BridgeDeviceProfile Bl616DualSense = SonyDualSense with
+    {
+        Key = "bl616-dualsense",
+        DisplayName = "BL616 DualSense Manager",
+        ManagerSerialNumber = "ControllerBridge BL616",
+        LegacyManagerProductName = null,
+        Tags = ["bl616", "ds5", "dualsense"]
+    };
+
+    public static readonly BridgeDeviceProfile Bl616DualSenseEdge = SonyDualSenseEdge with
+    {
+        Key = "bl616-dualsense-edge",
+        DisplayName = "BL616 DualSense Edge Manager",
+        ManagerSerialNumber = "ControllerBridge BL616 Edge",
+        LegacyManagerProductName = null,
+        Tags = ["bl616", "ds5", "dse", "dualsense-edge"]
+    };
+
+    public static readonly BridgeDeviceProfile Bl616NintendoNs2Pro = NintendoNs2Pro with
+    {
+        Key = "bl616-ns2pro-nintendo",
+        DisplayName = "BL616 NS2Pro Manager",
+        ManagerSerialNumber = "CB616NS2-0002",
+        Tags = ["bl616", "ns2pro"]
+    };
+
     public static IReadOnlyList<BridgeDeviceProfile> All { get; } =
     new[]
     {
@@ -138,7 +172,11 @@ public static class BridgeDeviceProfiles
         SonyDualSense,
         SonyDualSenseEdge,
         PicoDualSense,
-        NintendoNs2Pro
+        NintendoNs2Pro,
+        Bl616Xbox360,
+        Bl616DualSense,
+        Bl616DualSenseEdge,
+        Bl616NintendoNs2Pro
     };
 
     public static BridgeDeviceProfile? Find(ushort vendorId, ushort productId) =>

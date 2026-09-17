@@ -66,7 +66,7 @@ foreach ($board in @($manifest.boards)) {
 
 foreach ($firmware in @($manifest.firmware)) {
     $method = [string]$firmware.flashMethod
-    if ($method -notin @('None', 'PicoUf2', 'SifliSerial')) {
+    if ($method -notin @('None', 'PicoUf2', 'SifliSerial', 'BouffaloUart')) {
         throw "Unsupported firmware flashMethod: $method"
     }
     foreach ($boardId in @($firmware.boardIds)) {
@@ -108,6 +108,31 @@ foreach ($firmware in @($manifest.firmware)) {
                     [StringComparison]::OrdinalIgnoreCase) -or
                 -not (Test-Path -LiteralPath $secondaryPath -PathType Leaf)) {
                 throw "SiFli package is missing a referenced artifact: $secondary"
+            }
+        }
+    } elseif ($method -eq 'BouffaloUart') {
+        $bundle = Get-Content -LiteralPath $artifact -Raw | ConvertFrom-Json
+        if ([int]$bundle.schemaVersion -ne 1 -or
+            [string]$bundle.chip -ne 'bl616' -or
+            [int]$bundle.baudRate -ne 2000000 -or
+            @($bundle.files).Count -ne 3) {
+            throw "Bouffalo UART artifact is not a valid BL616 bundle."
+        }
+        foreach ($file in @($bundle.files)) {
+            $secondary = [string]$file.path
+            if ([string]::IsNullOrWhiteSpace($secondary) -or
+                [IO.Path]::IsPathRooted($secondary) -or
+                $secondary.Replace('\', '/').Split('/') -contains '..') {
+                throw "BL616 bundle contains an unsafe artifact path: $secondary"
+            }
+            $secondaryPath = [IO.Path]::GetFullPath((Join-Path `
+                (Split-Path -Parent $artifact) $secondary))
+            if (-not $secondaryPath.StartsWith($prefix,
+                    [StringComparison]::OrdinalIgnoreCase) -or
+                -not (Test-Path -LiteralPath $secondaryPath -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $secondaryPath -Algorithm SHA256).Hash -ne
+                    [string]$file.sha256) {
+                throw "BL616 package file is missing or has the wrong SHA-256: $secondary"
             }
         }
     }

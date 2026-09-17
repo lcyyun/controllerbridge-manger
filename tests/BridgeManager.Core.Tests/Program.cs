@@ -144,6 +144,8 @@ var tests = new (string Name, Action Run)[]
     ("finds SF32LB52 DualSense Edge manager profile", FindsSf32lb52DualSenseEdgeManagerProfile),
     ("finds SF32LB52 Nintendo manager profile", FindsSf32lb52NintendoManagerProfile),
     ("resolves SF32 unified firmware module", ResolvesSf32UnifiedFirmwareModule),
+    ("resolves every BL616 USB identity to BL616", ResolvesBl616FirmwareModule),
+    ("loads the bundled BL616 module manifest", LoadsBundledBl616Manifest),
     ("distinguishes SF32 and Pico Nintendo identities", DistinguishesNintendoFirmwareModules),
     ("keeps unknown Nintendo identities board-neutral", KeepsUnknownNintendoIdentityNeutral),
     ("resolves ESP32-S3 NS2Pro firmware module", ResolvesEsp32S3Ns2FirmwareModule),
@@ -262,6 +264,51 @@ static void ResolvesSf32UnifiedFirmwareModule()
     AssertEqual(true, module.Capabilities.Has(BridgeCapability.UsbAudio));
     AssertEqual(2, module.UsbRoles.Count);
     AssertEqual(2, module.WirelessControllers.Count);
+}
+
+static void ResolvesBl616FirmwareModule()
+{
+    var registry = new BridgeFirmwareModuleRegistry();
+    var identities = new[]
+    {
+        ("bl616-xbox360", (ushort)0x045e, (ushort)0x028e,
+            BridgeUsbRole.Xbox, "BL616X360"),
+        ("bl616-dualsense", (ushort)0x054c, (ushort)0x0ce6,
+            BridgeUsbRole.DualSense, "ControllerBridge BL616"),
+        ("bl616-dualsense-edge", (ushort)0x054c, (ushort)0x0df2,
+            BridgeUsbRole.DualSenseEdge, "ControllerBridge BL616 Edge"),
+        ("bl616-ns2pro-nintendo", (ushort)0x057e, (ushort)0x2069,
+            BridgeUsbRole.NintendoNs2Pro, "CB616NS2-0002")
+    };
+    foreach (var (key, vid, pid, role, serial) in identities)
+    {
+        var descriptor = new DeviceDescriptor(key, key, vid, pid,
+            DeviceTransportKind.Hid, key, true, true, true, role,
+            ProfileKey: key, SerialNumber: serial);
+        AssertEqual("bl616-unified", registry.Resolve(descriptor).Id);
+    }
+    var module = registry.Find("bl616-unified")!;
+    AssertEqual(false,
+        module.Capabilities.Has(BridgeCapability.InputSourceSelection));
+    AssertEqual(0, module.InputSources.Count);
+    AssertEqual(4, module.UsbRoles.Count);
+    AssertEqual(2, module.WirelessControllers.Count);
+    AssertEqual(true, module.Capabilities.Has(BridgeCapability.FirmwareFlashing));
+    AssertEqual(FirmwareFlashMethod.BouffaloUart, module.Firmware.Single().FlashMethod);
+}
+
+static void LoadsBundledBl616Manifest()
+{
+    var path = Path.Combine(Environment.CurrentDirectory, "modules",
+        "bl616-unified", "bl616-unified.bridge-module.json");
+    var module = BridgeModulePackageLoader.LoadFile(path);
+    AssertEqual("bl616-unified", module.Id);
+    AssertEqual(4, module.HidDevices.Count);
+    AssertEqual(0, module.InputSources.Count);
+    AssertEqual(false,
+        module.Capabilities.Has(BridgeCapability.InputSourceSelection));
+    AssertEqual(FirmwareFlashMethod.BouffaloUart,
+        module.Firmware.Single().FlashMethod);
 }
 
 static void DistinguishesNintendoFirmwareModules()

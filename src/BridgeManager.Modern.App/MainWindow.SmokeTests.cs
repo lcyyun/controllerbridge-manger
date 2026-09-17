@@ -1,4 +1,5 @@
 using BridgeManager.Core;
+using BridgeManager.Core.FirmwareModules;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Graphics;
@@ -12,24 +13,69 @@ public sealed partial class MainWindow
         SmokeCapture.Require(!_discoverDevices, "Shell smoke must not discover/open real devices.");
         Title = "Controller Bridge UI Test - offline fixtures";
         _inputWatchdog.Stop();
-        SmokeCapture.Require(GetModuleDirectories().Count() == 1 &&
-            GetModuleDirectories().Single() == Path.Combine(AppContext.BaseDirectory, "modules"),
-            "A source checkout can override the application's bundled modules.");
+        var moduleDirectories = GetModuleDirectories().ToArray();
+        SmokeCapture.Require(moduleDirectories.Length is >= 1 and <= 2 &&
+            moduleDirectories[0] == Path.Combine(AppContext.BaseDirectory, "modules") &&
+            moduleDirectories.All(path => path == moduleDirectories[0] ||
+                path == InstalledModuleRoot),
+            "Module loading escaped the bundled and verified-update roots.");
         _module = _moduleRegistry.Find("sf32-unified")!;
         InitializeModuleUi();
         await DisconnectAsync();
+        ShowManagerUpdate(new ManagerReleaseUpdate("9.9.9", "界面测试更新",
+            "https://github.com/lcyyun/controllerbridge-manger/releases/tag/v9.9.9",
+            "https://github.com/lcyyun/controllerbridge-manger/releases/download/v9.9.9/test.zip",
+            "test.zip", 16 * 1024 * 1024, null));
         SmokeCapture.Require(BuildConnectionText(null, null, null, "connecting") == "尚未读取" &&
             WirelessControllerList.Items.OfType<WirelessControllerItem>().All(item =>
                 !item.CanPair && !item.CanConnect && !item.CanDisconnect && !item.CanForget),
             "An unread wireless state was presented as unpaired or actionable.");
         var root = (FrameworkElement)Content;
-        foreach (var (width, height, suffix) in new[] { (1360, 940, "wide"), (860, 900, "narrow") })
+        foreach (var (width, height, suffix) in new[]
+        {
+            (1640, 940, "maximized"), (1360, 940, "wide"),
+            (860, 900, "narrow"), (620, 900, "compact")
+        })
         {
             AppWindow.Resize(new SizeInt32(width, height));
+            await Task.Delay(250);
+            SmokeCapture.Require(
+                width >= 980
+                    ? Grid.GetRow(InputDetailPanel) == 0 && Grid.GetColumn(InputDetailPanel) == 1
+                    : Grid.GetRow(InputDetailPanel) == 1 && Grid.GetColumn(InputDetailPanel) == 0,
+                $"Input layout did not adapt at {width}px.");
+            SmokeCapture.Require(
+                width >= 980
+                    ? Grid.GetRow(DeviceSettingsPanel) == 0 && Grid.GetColumn(DeviceSettingsPanel) == 1
+                    : Grid.GetRow(DeviceSettingsPanel) == 1 && Grid.GetColumn(DeviceSettingsPanel) == 0,
+                $"Advanced layout did not adapt at {width}px.");
+            SmokeCapture.Require(
+                width >= 980
+                    ? Grid.GetRow(FirmwareFlashPanel) == 0 && Grid.GetColumn(FirmwareFlashPanel) == 1
+                    : Grid.GetRow(FirmwareFlashPanel) == 1 && Grid.GetColumn(FirmwareFlashPanel) == 0,
+                $"Firmware layout did not adapt at {width}px.");
+            SmokeCapture.Require(
+                width >= 780
+                    ? Grid.GetRow(HeaderActions) == 0
+                    : Grid.GetRow(HeaderActions) == 1 && Grid.GetRow(InputMetricPanel) == 1,
+                $"Shell layout did not adapt at {width}px.");
+            SmokeCapture.Require(ManagerUpdateBanner.Visibility == Visibility.Visible &&
+                (width >= 780
+                    ? Grid.GetRow(ManagerUpdateActions) == 0 &&
+                      Grid.GetColumn(ManagerUpdateActions) == 2
+                    : Grid.GetRow(ManagerUpdateActions) == 1 &&
+                      Grid.GetColumn(ManagerUpdateActions) == 1),
+                $"Manager update banner did not adapt at {width}px.");
+            SmokeCapture.Require(width >= 720 ||
+                MainNavigation.PaneDisplayMode == NavigationViewPaneDisplayMode.LeftCompact,
+                $"Compact navigation disappeared at {width}px.");
+            SmokeCapture.Require(width < 1640 || Math.Abs(HomePageContent.Width - 1180) < 0.5,
+                "Maximized page content did not retain its centered maximum width.");
             root.RequestedTheme = ElementTheme.Light;
             foreach (var (item, tag) in new[] {
                 (HomeNavItem, "home"), (InputNavItem, "input"),
-                (FeedbackNavItem, "feedback"), (AdvancedNavItem, "advanced") })
+                (FeedbackNavItem, "feedback"), (FirmwareNavItem, "firmware"),
+                (AdvancedNavItem, "advanced") })
             {
                 MainNavigation.SelectedItem = item;
                 ShowPage(tag);
@@ -64,6 +110,23 @@ public sealed partial class MainWindow
                     SmokeCapture.Require(ButtonsText.Text.Contains("Cross") &&
                         Interlocked.Read(ref _localSamples) == samples + 2,
                         "Coalesced local input lost the newest state or packet count.");
+                }
+                else if (tag == "firmware")
+                {
+                    SmokeCapture.Require(FirmwareSourceBox.SelectedIndex == 0 &&
+                        FirmwareSourceBox.Items.Count == 1,
+                        "Firmware update source was not GitHub-only by default.");
+                    SmokeCapture.Require(FirmwareBoardBox.Items.Count == 0 &&
+                        FirmwareReleaseList.ItemsSource is null &&
+                        !FirmwareCheckUpdatesButton.IsEnabled,
+                        "Disconnected firmware page exposed another receiver's firmware.");
+                    SmokeCapture.Require(AssetMatchesModule(new GithubModuleAsset(
+                            "bl616-unified-0.2.0.cbmodule", "https://github.com/x/y",
+                            "v0.2.0", 1, null), "bl616-unified") &&
+                        !AssetMatchesModule(new GithubModuleAsset(
+                            "sf32-unified-0.5.0.cbmodule", "https://github.com/x/y",
+                            "v0.5.0", 1, null), "bl616-unified"),
+                        "Firmware release filtering crossed receiver modules.");
                 }
                 await SmokeCapture.SaveAsync(root, output, $"{tag}-{suffix}.png");
             }
