@@ -98,6 +98,18 @@ internal static class FirmwareFlashTests
                 "Valid BL616 bundle and enumerated bridge were rejected");
             Require(FirmwareFlashService.DescribeArtifact(module, blFirmware).Available,
                 "Valid BL616 bundle was not advertised");
+            var fakeTool = Environment.ProcessPath!;
+            Require(Path.GetFileName(fakeTool).Equals("BridgeManager.Core.Tests.exe", StringComparison.OrdinalIgnoreCase),
+                "Launcher regression must run using the test executable, never a vendor tool");
+            var launcherService = new FirmwareFlashService(() => null, () => ["COM8", "COM9"], () => fakeTool);
+            var launch = launcherService.FlashAsync(module, blFirmware, "COM8", null,
+                CancellationToken.None).GetAwaiter().GetResult();
+            Require(launch.Success, "BL616 child process/output/config-lifetime regression: " + launch.Message);
+            var failedLaunch = launcherService.FlashAsync(module, blFirmware, "COM9", null,
+                CancellationToken.None).GetAwaiter().GetResult();
+            Require(!failedLaunch.Success && failedLaunch.Message.Contains("23") &&
+                failedLaunch.Message.Contains("FAKE_BLFLASH_STDERR_CAPTURED"),
+                "BL616 launcher lost the child's exit code or stderr");
             WriteBlManifest(corruptHash: true);
             Require(!blService.Check(module, blFirmware, "COM8").Ready,
                 "BL616 image with the wrong hash was accepted");

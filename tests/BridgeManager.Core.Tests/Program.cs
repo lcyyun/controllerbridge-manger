@@ -5,6 +5,25 @@ using BridgeManager.Core.FirmwareModules;
 using BridgeManager.Core.Protocol;
 using BridgeManager.Core.Transports;
 
+// Fake BLFlash child process for end-to-end launcher regression only.
+// Never opens a serial port or invokes any vendor flashing executable.
+if (args.Contains("--interface=uart"))
+{
+    var config = args.Single(argument => argument.StartsWith("--config="))[9..];
+    var contents = File.ReadAllText(config);
+    await Task.Delay(200);
+    if (File.ReadAllText(config) != contents || !args.Contains("--warm_reset"))
+        throw new InvalidOperationException("Flash configuration disappeared or reset was omitted.");
+    Console.Error.WriteLine("FAKE_BLFLASH_STDERR_CAPTURED");
+    if (args.Contains("--port=COM9"))
+    {
+        Environment.ExitCode = 23;
+        return;
+    }
+    Console.WriteLine("Flash writing succeeded");
+    return;
+}
+
 if (args.Length == 1 && args[0] == "--list-local")
 {
     await using var controllers = new LocalControllerService();

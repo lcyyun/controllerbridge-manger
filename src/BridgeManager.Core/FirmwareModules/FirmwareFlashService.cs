@@ -280,6 +280,8 @@ public sealed class FirmwareFlashService
             var start = new ProcessStartInfo(executable)
             {
                 UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
                 CreateNoWindow = true,
                 WorkingDirectory = Path.GetDirectoryName(manifestPath)!
             };
@@ -643,15 +645,21 @@ public sealed class FirmwareFlashService
         RunProcessAsync(ProcessStartInfo start,
                         CancellationToken cancellationToken)
     {
+        // Every caller consumes both streams. Configure them before starting,
+        // so a missing per-tool option cannot orphan a running flash process.
+        start.UseShellExecute = false;
+        start.RedirectStandardOutput = true;
+        start.RedirectStandardError = true;
         using var process = Process.Start(start) ??
-            throw new InvalidOperationException("无法启动 sftool。");
-        var outputTask = process.StandardOutput.ReadToEndAsync();
-        var errorTask = process.StandardError.ReadToEndAsync();
+            throw new InvalidOperationException("无法启动烧录工具。");
         try
         {
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
             await process.WaitForExitAsync(cancellationToken);
+            return (process.ExitCode, await outputTask, await errorTask);
         }
-        catch (OperationCanceledException)
+        catch
         {
             if (!process.HasExited)
             {
@@ -660,7 +668,6 @@ public sealed class FirmwareFlashService
             }
             throw;
         }
-        return (process.ExitCode, await outputTask, await errorTask);
     }
 
     private static string ResolveSifliFile(string parameterPath,

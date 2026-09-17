@@ -15,7 +15,7 @@ public sealed record ManagerReleaseUpdate(
 
 public sealed class ManagerReleaseService
 {
-    public const string CurrentVersion = "0.3.0-preview.1";
+    public const string CurrentVersion = "0.3.1-preview.1";
     private const string ReleasesUrl =
         "https://api.github.com/repos/lcyyun/controllerbridge-manger/releases?per_page=30";
     private static readonly HttpClient Client = CreateClient();
