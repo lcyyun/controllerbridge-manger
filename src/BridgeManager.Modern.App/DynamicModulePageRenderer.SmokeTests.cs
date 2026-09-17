@@ -23,20 +23,18 @@ internal sealed partial class DynamicModulePageRenderer
         var nsPage = module.Pages.Single(page => page.Id == "ns-mapping");
         var ps = psPage.Sections.Single().Controls.Single();
         var ns = nsPage.Sections.Single().Controls.Single();
-        var configurations = new Dictionary<string, Dictionary<string, string>>
-        {
-            ["ds5"] = ControlIds.ToDictionary(id => id, id => id),
-            ["ns2pro"] = ControlIds.ToDictionary(id => id, id => id)
-        };
+        var configurations = new[] { "ds5/ds5", "ds5/ns2pro", "ns2pro/ds5", "ns2pro/ns2pro", "ds5/xbox", "ns2pro/xbox" }
+            .ToDictionary(route => route, _ => ControlIds.ToDictionary(id => id, id => id));
         var commands = new List<string>();
         var statuses = new List<string>();
         string? failingAction = null;
         string failureDetail = "simulated device failure";
         bool deviceDirty = false;
         TaskCompletionSource<JsonElement>? pendingRead = null;
-        JsonElement Reply(string profile) => JsonSerializer.SerializeToElement(new
+        JsonElement Reply(string profile, string output) => JsonSerializer.SerializeToElement(new
         {
-            ok = true, profile, dirty = deviceDirty, entries = configurations[profile]
+            ok = true, profile, output, mapping_schema = 4, dirty = deviceDirty,
+            entries = configurations[$"{profile}/{output}"]
         });
         Task<JsonElement> Execute(string action, IReadOnlyDictionary<string, string> parameters)
         {
@@ -44,18 +42,19 @@ internal sealed partial class DynamicModulePageRenderer
             commands.Add(command);
             if (action == failingAction) throw new IOException(failureDetail);
             var profile = parameters["profile"];
+            var output = parameters["output"];
             if (action == "mapping.read" && pendingRead is not null && profile == "ds5")
                 return pendingRead.Task;
             if (action == "mapping.set")
-                configurations[profile][parameters["target"]] = parameters["source"];
-            return Task.FromResult(Reply(profile));
+                configurations[$"{profile}/{output}"][parameters["target"]] = parameters["source"];
+            return Task.FromResult(Reply(profile, output));
         }
         void Require(bool condition, string description)
         {
             if (!condition) throw new InvalidOperationException(description);
         }
         var renderer = new DynamicModulePageRenderer(Execute,
-            (text, error) => statuses.Add($"{error}: {text}"));
+            (text, error) => statuses.Add($"{error}: {text}")) { _expandAdvancedForSmoke = true };
         var host = new StackPanel { Spacing = 14 };
         var frame = new Grid
         {
@@ -85,11 +84,11 @@ internal sealed partial class DynamicModulePageRenderer
         await Task.Delay(250);
         await renderer.RenderAsync(psPage, host);
         Require(renderer._mappingLoaded, "PS mapping failed to load");
-        Require(commands.Last() == "mapping get ds5", "Read omitted profile");
+        Require(commands.Last() == "mapping get ds5 ds5", "Read omitted input/output pair");
         Require(renderer._mappingSelectors.Count == 25, "Missing mapping controls");
-        Require(renderer._mappingDiagram!.AllTargets.Count == 25 &&
-                renderer._mappingDiagram.AllTargets.Distinct().Count() == 25,
-            "Diagram does not expose every mapping target exactly once");
+        Require(renderer._mappingDiagram!.AllTargets.Count == 23 &&
+                renderer._mappingDiagram.AllTargets.Distinct().Count() == 23,
+            "DS5 diagram does not expose its native targets exactly once");
         await CaptureAsync(frame, "ps-default.png");
         new ButtonAutomationPeer(renderer._mappingDiagram.CalloutButtons["south"]).Invoke();
         await Task.Delay(150);
@@ -133,8 +132,9 @@ internal sealed partial class DynamicModulePageRenderer
         Require(renderer._mappingSelectors["south"].SelectedValue?.ToString() == "east",
             "PS draft was lost during navigation");
         await renderer.ApplyMappingAsync(ps);
-        Require(configurations["ds5"]["south"] == "east" &&
-                configurations["ns2pro"]["south"] == "south", "Save crossed profile boundary");
+        Require(configurations["ds5/ds5"]["south"] == "east" &&
+                configurations.Where(pair => pair.Key != "ds5/ds5").All(pair =>
+                    pair.Value["south"] == "south"), "Save crossed route boundary");
         Require(commands.Count(command => command.StartsWith("mapping set ds5")) == 2,
             "Save should write only changed bindings");
         Require(statuses.Last().StartsWith("False:"), "Save reported failure");
@@ -158,7 +158,7 @@ internal sealed partial class DynamicModulePageRenderer
         pendingRead = new TaskCompletionSource<JsonElement>();
         var slowPs = renderer.RenderAsync(psPage, host);
         await renderer.RenderAsync(nsPage, host);
-        pendingRead.SetResult(Reply("ds5"));
+        pendingRead.SetResult(Reply("ds5", "ds5"));
         await slowPs;
         Require(renderer._mappingDefinition == ns && renderer._deviceMapping["south"] == "south",
             "Late PS reply overwrote NS page");
@@ -199,6 +199,80 @@ internal sealed partial class DynamicModulePageRenderer
         frame.RequestedTheme = ElementTheme.Light;
         frame.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
             Windows.UI.Color.FromArgb(255, 249, 249, 249));
+        for (var repeat = 0; repeat < 12; repeat++)
+        {
+            await renderer.RenderAsync(psPage, host);
+            await Task.Delay(35);
+            var retiredDiagram = renderer._mappingDiagram!;
+            retiredDiagram.OpenEditor("south");
+            await renderer.RenderAsync(nsPage, host);
+            // Reproduce a delayed Unloaded/flyout callback after the renderer
+            // has cleared and populated its dictionaries for another route.
+            retiredDiagram.CloseEditor();
+            await Task.Delay(35);
+        }
+        foreach (var route in module.Pages.Where(page => page.Sections.SelectMany(section => section.Controls)
+                     .Any(control => control.Type == BridgeModuleControlType.MappingEditor)))
+        {
+            await renderer.RenderAsync(route, host);
+            var definition = route.Sections.Single().Controls.Single();
+            Require(renderer._mappingComboExpander is not null, "Missing combination editor");
+            renderer._mappingComboExpander!.IsExpanded = true;
+            var comboBody = (StackPanel)renderer._mappingComboExpander.Content;
+            var comboSource = comboBody.Children.OfType<ComboBox>().Single();
+            var comboTargets = comboBody.Children.OfType<Grid>().Single().Children.OfType<CheckBox>().ToArray();
+            comboSource.SelectedValue = "east";
+            comboTargets[0].IsChecked = true;
+            comboTargets[2].IsChecked = true;
+            Require(renderer._mappingSelectors["south"].SelectedValue?.ToString() == "east" &&
+                    renderer._mappingSelectors["west"].SelectedValue?.ToString() == "east",
+                "Combination did not assign two outputs to one physical source");
+            comboTargets[0].IsChecked = false;
+            Require(renderer._mappingSelectors["south"].SelectedValue?.ToString() == "none",
+                "Removing a combination output did not disable that target");
+            comboTargets[0].IsChecked = true;
+            if (definition.MappingOutput == "xbox")
+                Require(renderer._mappingDiagram!.AllTargets.Count == 17 && comboTargets.Length == 17,
+                    "Xbox mapping exposes unsupported output buttons");
+            renderer._mappingSelectors["west"].SelectedValue = "east";
+            await renderer.ApplyMappingAsync(definition);
+            Require(configurations[$"{definition.MappingProfile}/{definition.MappingOutput}"]["west"] == "east",
+                "Pair write did not reach selected route");
+            await CaptureAsync(frame, $"route-{definition.MappingProfile}-{definition.MappingOutput}.png");
+        }
+        window.AppWindow.Resize(new SizeInt32(1920, 1080));
+        renderer._expandAdvancedForSmoke = false;
+        foreach (var inputProfile in new[] { "ds5", "ns2pro" })
+        {
+            var sourcePage = module.Pages.Single(page => page.Id ==
+                (inputProfile == "ds5" ? "ps-xbox-mapping" : "ns-xbox-mapping"));
+            await renderer.RenderAsync(sourcePage, host);
+            await Task.Delay(150);
+            Require(renderer._inputMappingDiagram!.AllTargets.Count == (inputProfile == "ds5" ? 23 : 21),
+                "Input model changed with Xbox output identity");
+            renderer._inputMappingDiagram.OpenEditor("south");
+            Require(renderer._inputMappingDiagram.EditorContent is StackPanel,
+                "Physical input button did not open output editor");
+            var sourceEditor = (StackPanel)renderer._inputMappingDiagram.EditorContent!;
+            var outputChecks = ((StackPanel)sourceEditor.Children.OfType<ScrollViewer>().Single().Content)
+                .Children.OfType<CheckBox>().ToArray();
+            Require(outputChecks.Length == 17, "Xbox output choices are not native");
+            outputChecks[0].IsChecked = true;
+            outputChecks[2].IsChecked = true;
+            Require(renderer._mappingSelectors["south"].SelectedValue?.ToString() == "south" &&
+                    renderer._mappingSelectors["west"].SelectedValue?.ToString() == "south",
+                "Source-centric combination changed the wrong direction");
+            await CaptureAsync(sourceEditor, $"source-{inputProfile}-outputs.png");
+            renderer._inputMappingDiagram.CloseEditor();
+            await CaptureAsync(frame, $"source-{inputProfile}-xbox.png");
+        }
+        await CaptureAsync(frame, "mapping-large.png");
+        window.AppWindow.Resize(new SizeInt32(860, 650));
+        await CaptureAsync(frame, "mapping-short.png");
+        Require(scroll.ScrollableHeight > 0, "Short viewport has no usable vertical scroll");
+        scroll.ChangeView(null, scroll.ScrollableHeight, null, disableAnimation: true);
+        await CaptureAsync(frame, "mapping-scrolled.png");
+        Require(scroll.VerticalOffset > 0, "Mapping page failed to scroll");
         renderer._mappingDiagram!.OpenEditor("south");
         renderer.InvalidateConnection();
         Require(!renderer._mappingLoaded && renderer._mappingSaveButton?.IsEnabled == false,
@@ -206,11 +280,11 @@ internal sealed partial class DynamicModulePageRenderer
         Require(renderer._mappingDiagram!.EditorContent is null, "Disconnect left an editor open");
         await File.WriteAllLinesAsync(Path.Combine(outputDirectory, "commands.txt"), commands);
         await File.WriteAllTextAsync(Path.Combine(outputDirectory, "result.txt"),
-            "PASS profile parameters, draft isolation, delta save, callout/quick-button invocation, repeated picker/no implicit writes, 25 diagram targets, front/rear groups, failure gating, legacy firmware, stale replies, disconnect, wide/narrow/light/dark rendering");
+            "PASS six-route parameters and writes, combinations, draft isolation, delta save, picker navigation stress, native output targets, failure gating, legacy firmware, stale replies, disconnect, large/narrow/short/scrolled/light/dark rendering");
 
         async Task CheckDiagramGroupsAsync(string prefix)
         {
-            for (var group = 0; group < 5; group++)
+            for (var group = 0; group < renderer._mappingDiagram!.GroupCount; group++)
             {
                 renderer._mappingDiagram!.SelectGroup(group);
                 await Task.Delay(80);

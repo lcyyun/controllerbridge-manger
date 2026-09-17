@@ -42,10 +42,15 @@ public sealed class WindowsHidTransport : IDeviceTransport, IInputReportSource
     {
         cancellationToken.ThrowIfCancellationRequested();
         ObjectDisposedException.ThrowIf(_disposed, this);
-        _stream.SetFeature(BuildReport(
+        var report = BuildReport(
             reportId, payload.Span, _device.GetMaxFeatureReportLength(),
-            "feature"));
-        return Task.CompletedTask;
+            "feature");
+        return Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _stream.SetFeature(report);
+            cancellationToken.ThrowIfCancellationRequested();
+        }, cancellationToken);
     }
 
     public async Task WriteOutputReportAsync(byte reportId,
@@ -72,8 +77,13 @@ public sealed class WindowsHidTransport : IDeviceTransport, IInputReportSource
         }
         var report = new byte[length];
         report[0] = reportId;
-        _stream.GetFeature(report);
-        return Task.FromResult(report);
+        return Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _stream.GetFeature(report);
+            cancellationToken.ThrowIfCancellationRequested();
+            return report;
+        }, cancellationToken);
     }
 
     public async ValueTask DisposeAsync()

@@ -20,10 +20,10 @@ public sealed partial class MainWindow
         ManagerCurrentVersionText.Text =
             $"当前 Manager：{ManagerReleaseService.CurrentVersion}";
         if (_discoverDevices && preferences.ShowManagerUpdates)
-            _ = CheckManagerUpdateAsync();
+            _ = CheckManagerUpdateBannerAsync();
     }
 
-    private async Task CheckManagerUpdateAsync()
+    private async Task CheckManagerUpdateBannerAsync()
     {
         try
         {
@@ -79,7 +79,7 @@ public sealed partial class MainWindow
         if (!_managerPreferencesLoaded) return;
         var enabled = ManagerUpdateChecksEnabledCheckBox.IsChecked == true;
         await SaveManagerPreferencesAsync(enabled);
-        if (enabled) await CheckManagerUpdateAsync();
+        if (enabled) await CheckManagerUpdateBannerAsync();
         else ManagerUpdateBanner.Visibility = Visibility.Collapsed;
     }
 

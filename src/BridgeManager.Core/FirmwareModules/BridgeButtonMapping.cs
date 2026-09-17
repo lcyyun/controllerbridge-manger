@@ -4,6 +4,8 @@ namespace BridgeManager.Core.FirmwareModules;
 
 public static class BridgeButtonMapping
 {
+    public const int PairMappingSchema = 4;
+
     public static IReadOnlyList<string> ControlIds { get; } = Array.AsReadOnly(
         new[]
         {
@@ -22,12 +24,15 @@ public static class BridgeButtonMapping
         var parameters = new Dictionary<string, string>();
         if (definition.MappingProfile is { Length: > 0 } profile)
             parameters["profile"] = profile;
+        if (definition.MappingOutput is { Length: > 0 } output)
+            parameters["output"] = output;
         if (target is not null) parameters["target"] = target;
         if (source is not null) parameters["source"] = source;
         return parameters;
     }
 
-    public static Dictionary<string, string> ReadReply(
+    /// <summary>Checks mapping identity for reads and mutation acknowledgments, without requiring entries.</summary>
+    public static void ValidateReplyIdentity(
         BridgeModuleControlDefinition definition, JsonElement reply)
     {
         // A legacy/global reply must never be shown as an independent profile.
@@ -40,11 +45,33 @@ public static class BridgeButtonMapping
             throw new InvalidDataException(
                 "设备未确认独立映射配置，请更新对应固件后重新读取。");
         }
+        if (definition.MappingOutput is { } output &&
+            (definition.MappingProfile is not ("ds5" or "ns2pro") ||
+             output is not ("ds5" or "ns2pro" or "xbox") ||
+             reply.ValueKind != JsonValueKind.Object ||
+             !reply.TryGetProperty("output", out var returnedOutput) ||
+             returnedOutput.ValueKind != JsonValueKind.String ||
+             returnedOutput.GetString() != output ||
+             !reply.TryGetProperty("mapping_schema", out var schema) ||
+             schema.ValueKind != JsonValueKind.Number ||
+             !schema.TryGetInt32(out var schemaVersion) ||
+             schemaVersion != PairMappingSchema))
+        {
+            throw new InvalidDataException(
+                $"设备未确认 {definition.MappingProfile} → {output} 独立映射（mapping_schema 4），" +
+                "请更新支持六组映射的固件后重新读取。");
+        }
         if (reply.ValueKind == JsonValueKind.Object &&
             reply.TryGetProperty("ok", out var ok) && ok.ValueKind == JsonValueKind.False)
         {
             throw new InvalidDataException("设备拒绝映射操作。");
         }
+    }
+
+    public static Dictionary<string, string> ReadReply(
+        BridgeModuleControlDefinition definition, JsonElement reply)
+    {
+        ValidateReplyIdentity(definition, reply);
         if (!BridgeModuleOperationEngine.TrySelectJsonPointer(
                 reply, definition.Binding ?? "", out var entries))
         {
@@ -93,12 +120,17 @@ public static class BridgeButtonMapping
     }
 
     public static bool CanCapture(string? profile, BridgePhysicalInput input,
+        string usbReportSource, IReadOnlyDictionary<string, string> deviceMapping) =>
+        CanCapture(profile, profile, input, usbReportSource, deviceMapping);
+
+    public static bool CanCapture(string? profile, string? output, BridgePhysicalInput input,
         string usbReportSource, IReadOnlyDictionary<string, string> deviceMapping)
     {
         // USB reports contain mapped output, not the original physical buttons.
         // Only a native identity path gives an unambiguous physical capture.
-        return deviceMapping.Count == ControlIds.Count &&
-               deviceMapping.All(pair => pair.Key == pair.Value) &&
+        return profile == output &&
+               deviceMapping.Count == ControlIds.Count &&
+               ControlIds.All(id => deviceMapping.TryGetValue(id, out var source) && source == id) &&
                ((profile == "ds5" && input == BridgePhysicalInput.DualSense &&
                  usbReportSource == "DS5 USB input") ||
                 (profile == "ns2pro" && input == BridgePhysicalInput.NintendoNs2Pro &&

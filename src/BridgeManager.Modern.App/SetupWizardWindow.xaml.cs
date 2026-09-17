@@ -65,6 +65,7 @@ public sealed partial class SetupWizardWindow
         _discoverDevices = discoverDevices;
         InitializeComponent();
         WizardLayout.SizeChanged += WizardLayout_SizeChanged;
+        PageScrolling.Attach(WizardScroller);
         AppWindow.Resize(new SizeInt32(1040, 760));
         InitializeWizard();
         WizardDontShowAgainCheckBox.IsChecked = !ShouldShowOnStartup();

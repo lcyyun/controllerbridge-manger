@@ -54,6 +54,12 @@ internal static class ControllerArtwork
         ("left_paddle", 403, 248), ("right_paddle", 237, 248));
     private static readonly IReadOnlyDictionary<string, Point> NintendoRear = Map(
         ("left_paddle", 469, 247), ("right_paddle", 171, 247));
+    private static readonly IReadOnlyDictionary<string, Point> XboxFront =
+        new ReadOnlyDictionary<string, Point>(NintendoFront
+            .Where(control => control.Key is not ("capture" or "c"))
+            .ToDictionary(control => control.Key,
+                control => control.Key == "guide" ? new Point(320, 113) : control.Value,
+                StringComparer.Ordinal));
 
     /// <summary>UI-thread factory. Null/unknown profiles use ds5; front Fn is opt-in.</summary>
     public static Canvas Create(string? profile, bool rear = false, bool edge = false)
@@ -64,6 +70,11 @@ internal static class ControllerArtwork
             Clip = new RectangleGeometry { Rect = new Rect(0, 0, Width, Height) }
         };
         AutomationProperties.SetAccessibilityView(canvas, AccessibilityView.Raw);
+        if (profile == "xbox")
+        {
+            XboxFace(canvas);
+            return canvas;
+        }
         var ns = IsNintendo(profile);
         Triggers(canvas, ns, rear);
         Shape(canvas, ns ? NintendoOutline : SonyOutline, ns ? Charcoal : Paper, Line, 1.5);
@@ -80,6 +91,7 @@ internal static class ControllerArtwork
     /// <summary>Read-only intrinsic coordinates; rear includes only GL/GR or Edge paddles.</summary>
     public static IReadOnlyDictionary<string, Point> Anchors(
         string? profile, bool rear = false, bool edge = false) =>
+        profile == "xbox" ? XboxFront :
         IsNintendo(profile) ? (rear ? NintendoRear : NintendoFront) :
         (rear ? SonyRear : edge ? SonyEdgeFront : SonyFront);
 
@@ -159,6 +171,33 @@ internal static class ControllerArtwork
         SmallButton(canvas, NintendoFront["capture"], "capture", true, 11, 11, true);
         SmallButton(canvas, NintendoFront["guide"], "home", true, 13, 13);
         SmallButton(canvas, NintendoFront["c"], "C", true, 11, 11, true);
+    }
+
+    private static void XboxFace(Canvas canvas)
+    {
+        Pair(canvas, "M 143,78 L 147,53 Q 149,43 167,42 L 199,44 Q 216,46 217,56 L 217,80 Z",
+            Ink, Line);
+        Shape(canvas, NintendoOutline, Paper, Line, 1.5);
+        Pair(canvas, "M 139,93 Q 168,80 204,86 L 215,99 Q 176,95 136,108 Z", Ink, Line);
+        Legend(canvas, XboxFront["left_trigger"], "LT", Paper, 11);
+        Legend(canvas, XboxFront["right_trigger"], "RT", Paper, 11);
+        Legend(canvas, XboxFront["left_shoulder"], "LB", Paper, 10);
+        Legend(canvas, XboxFront["right_shoulder"], "RB", Paper, 10);
+        Stick(canvas, XboxFront["left_stick"]);
+        Stick(canvas, XboxFront["right_stick"]);
+        Dpad(canvas, true);
+        var keys = new[] { "south", "east", "west", "north" };
+        var labels = new[] { "A", "B", "X", "Y" };
+        var colors = new[] { "#75B94D", "#E15E57", "#5BA7E2", "#E6BC49" };
+        for (var i = 0; i < keys.Length; i++)
+        {
+            Oval(canvas, XboxFront[keys[i]], 18.5, 18.5, Ink, Line);
+            Glyph(canvas, XboxFront[keys[i]], labels[i], colors[i]);
+        }
+        SmallButton(canvas, XboxFront["back"], "minus", true, 11, 11);
+        SmallButton(canvas, XboxFront["start"], "options", true, 11, 11);
+        Oval(canvas, XboxFront["guide"], 18, 18, Ink, Line);
+        Glyph(canvas, XboxFront["guide"], "X", Paper, 1.15);
     }
 
     private static void Rear(Canvas canvas, bool ns)

@@ -106,7 +106,7 @@ public sealed partial class MainWindow
                     var samples = Interlocked.Read(ref _localSamples);
                     LocalInputReceived(_localControllers, fixture with { Buttons = 2u });
                     LocalInputReceived(_localControllers, fixture);
-                    await Task.Delay(40);
+                    await Task.Delay(100);
                     SmokeCapture.Require(ButtonsText.Text.Contains("Cross") &&
                         Interlocked.Read(ref _localSamples) == samples + 2,
                         "Coalesced local input lost the newest state or packet count.");
@@ -135,6 +135,52 @@ public sealed partial class MainWindow
             PageSubtitleText.Text = "界面测试 · 离线数据 · 未连接设备";
             await SmokeCapture.SaveAsync(root, output, $"input-dark-{suffix}.png");
         }
+        MainNavigation.SelectedItem = HomeNavItem;
+        AppWindow.Resize(new SizeInt32(960, 650));
+        await SmokeCapture.SaveAsync(root, output, "home-short.png");
+        SmokeCapture.Require(HomePage.ScrollableHeight > 0, "Home page cannot scroll at short height.");
+        HomePage.ChangeView(null, HomePage.ScrollableHeight, null, disableAnimation: true);
+        await SmokeCapture.SaveAsync(root, output, "home-scrolled.png");
+        SmokeCapture.Require(HomePage.VerticalOffset > 0, "Home page scroll offset did not change.");
+        if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)
+        {
+            presenter.Maximize();
+            await SmokeCapture.SaveAsync(root, output, "home-maximized.png");
+            SmokeCapture.Require(PageShell.ActualWidth <= MainNavigation.ActualWidth, "Content exceeded available width.");
+            presenter.Restore();
+        }
+        await RenderMappingWorkspaceAsync();
+        SmokeCapture.Require(_dynamicNavigationItems.Count(item =>
+            Equals(item.Tag, "module:mapping")) == 1, "Mapping navigation was not consolidated.");
+        _mappingInputChoice!.SelectedValue = "ns2pro";
+        _mappingOutputChoice!.SelectedValue = "ds5";
+        await Task.Delay(80);
+        MainNavigation.SelectedItem = _dynamicNavigationItems.Single(item => Equals(item.Tag, "module:mapping"));
+        await SmokeCapture.SaveAsync(root, output, "mapping-workspace.png");
+        if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter mappingPresenter)
+        {
+            DynamicModulePage.ChangeView(0, DynamicModulePage.ScrollableHeight, null, disableAnimation: true);
+            await Task.Delay(80);
+            DynamicModulePage.ChangeView(0, 0, null, disableAnimation: true);
+            mappingPresenter.Maximize();
+            await SmokeCapture.SaveAsync(root, output, "mapping-maximized.png");
+            var contentOrigin = DynamicModulePageContent.TransformToVisual(DynamicModulePage)
+                .TransformPoint(new Windows.Foundation.Point());
+            SmokeCapture.Require(contentOrigin.X >= -1 &&
+                contentOrigin.X + DynamicModulePageContent.ActualWidth <= DynamicModulePage.ActualWidth + 1,
+                $"Maximized mapping content clipped: x={contentOrigin.X}, " +
+                $"content={DynamicModulePageContent.ActualWidth}, viewport={DynamicModulePage.ActualWidth}, " +
+                $"extent={DynamicModulePage.ExtentWidth}, offset={DynamicModulePage.HorizontalOffset}.");
+            mappingPresenter.Restore();
+            await SmokeCapture.SaveAsync(root, output, "mapping-restored.png");
+        }
+        var roles = RoleOptionsList.ItemsSource;
+        var wireless = WirelessControllerList.ItemsSource;
+        for (var iteration = 0; iteration < 100; iteration++)
+            UpdateSummary(System.Text.Json.JsonSerializer.SerializeToElement(new { input_valid = false }));
+        SmokeCapture.Require(ReferenceEquals(roles, RoleOptionsList.ItemsSource) &&
+            ReferenceEquals(wireless, WirelessControllerList.ItemsSource),
+            "Unchanged status rebuilt option controls.");
         _localInputActive = false;
         await File.WriteAllTextAsync(Path.Combine(output, "shell-result.txt"),
             "PASS offline input navigation, local input without receiver, source isolation, wide/narrow/light/dark page rendering");

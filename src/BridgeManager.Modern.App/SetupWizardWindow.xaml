@@ -74,14 +74,14 @@
                 </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                 <StackPanel Spacing="4">
-                    <TextBlock x:Name="WizardStepTitle" Text="欢迎使用 Controller Bridge" FontSize="25" FontWeight="SemiBold" />
+                    <TextBlock x:Name="WizardStepTitle" Text="欢迎使用 Controller Bridge" FontSize="25" FontWeight="SemiBold" TextWrapping="Wrap" />
                     <TextBlock x:Name="WizardStepSubtitle" Text="用几步完成板卡、固件和手柄设置" Opacity="0.68" TextWrapping="Wrap" />
                 </StackPanel>
                 <TextBlock x:Name="WizardStepCounter" Grid.Column="1" Text="步骤 1 / 6" VerticalAlignment="Center" FontWeight="SemiBold" />
             </Grid>
 
-            <ScrollViewer Grid.Row="1" Margin="0,22,0,16" VerticalScrollBarVisibility="Auto">
-                <Grid MinHeight="470">
+            <ScrollViewer x:Name="WizardScroller" Grid.Row="1" Margin="0,22,0,16" VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch" ZoomMode="Disabled">
+                <Grid>
                     <StackPanel x:Name="WizardWelcomePanel" Spacing="18" VerticalAlignment="Center" MaxWidth="620" HorizontalAlignment="Center">
                         <Border Width="72" Height="72" CornerRadius="8" Background="{StaticResource BridgeAccentSoftBrush}" BorderBrush="{StaticResource BridgeAccentBrush}" BorderThickness="1">
                             <FontIcon Glyph="&#xE9D9;" FontSize="34" Foreground="{StaticResource BridgeAccentBrush}" />

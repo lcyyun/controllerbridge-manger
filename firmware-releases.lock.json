@@ -4,12 +4,12 @@
     {
       "moduleId": "sf32-unified",
       "repository": "lcyyun/controllerbridge-SF32LB52",
-      "tag": "v0.1.0-bootstrap.1",
-      "asset": "sf32-unified-0.5.0-dev.cbmodule",
-      "sourceCommit": "6ed9dac3dacbe8e655cd5538a131ceb4d21e8afa",
-      "size": 733601,
-      "sha256": "effed8ded2cd031a779dc8f7307045c0d5a42e1480fd402fbf25b27a8a1c29e0",
-      "moduleVersion": "0.5.0-dev",
+      "tag": "v0.7.0-dev.1",
+      "asset": "sf32-unified-0.7.0-dev.cbmodule",
+      "sourceCommit": "c6008ec683d8f4e09e2f8ef832ec21f088fc7fb6",
+      "size": 734694,
+      "sha256": "294fd6f4de6326c72cdec1aca29394039e80b208611a5218878c0604ddb624af",
+      "moduleVersion": "0.7.0-dev",
       "runtimeApiVersion": 2,
       "boards": ["sf32lb52-devkit-nano"],
       "bundled": true

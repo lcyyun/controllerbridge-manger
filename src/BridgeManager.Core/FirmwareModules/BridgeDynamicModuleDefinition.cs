@@ -69,6 +69,9 @@ public sealed class BridgeModuleControlDefinition
 
     // MappingEditor uses catalogs supplied by the host or a future catalog provider.
     public string? MappingProfile { get; init; }
+    // Physical source + USB output selects an independent schema-3 mapping.
+    // Omit MappingOutput only for legacy global/per-source definitions.
+    public string? MappingOutput { get; init; }
     public string? SourceCatalog { get; init; }
     public string? TargetCatalog { get; init; }
     public string? ResetAction { get; init; }

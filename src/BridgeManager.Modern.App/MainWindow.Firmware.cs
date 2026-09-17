@@ -1,4 +1,6 @@
 using System.IO.Ports;
+using System.IO.Compression;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using BridgeManager.Core.FirmwareModules;
 using Microsoft.UI.Xaml;
@@ -30,7 +32,9 @@ public sealed partial class MainWindow
             ? _module : null;
         var boardIds = connectedModule?.Boards.Select(board => board.Id)
             .ToHashSet(StringComparer.OrdinalIgnoreCase) ??
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            (_client is null && FirmwareBoardBox.ItemsSource is IEnumerable<BridgeBoardDefinition> previousBoards
+                ? previousBoards.Select(board => board.Id).ToHashSet(StringComparer.OrdinalIgnoreCase)
+                : new HashSet<string>(StringComparer.OrdinalIgnoreCase));
         var boards = _moduleRegistry.GetBoards().Where(board =>
             boardIds.Contains(board.Id))
             .ToArray();
@@ -75,7 +79,10 @@ public sealed partial class MainWindow
         try
         {
             var assets = await _firmwareReleaseService.GetModuleAssetsAsync(
-                cancellationToken: CancellationToken.None);
+                repository: connectedModuleId == "sf32-unified"
+                    ? "controllerbridge-SF32LB52" : GithubModuleReleaseService.DefaultRepository,
+                cancellationToken: _windowCancellation.Token,
+                aggregateOfficialRepositories: false);
             var matchingAssets = assets.Where(asset =>
                 AssetMatchesModule(asset, connectedModuleId)).ToArray();
             if (_client is null || !_module.Id.Equals(connectedModuleId,
@@ -120,6 +127,12 @@ public sealed partial class MainWindow
     {
         if (_firmwareUpdateBusy ||
             FirmwareReleaseList.SelectedItem is not GithubModuleAsset asset) return;
+        var moduleId = _module.Id;
+        if (_client is null || !AssetMatchesModule(asset, moduleId))
+        {
+            RefreshFirmwareTargets();
+            return;
+        }
         _firmwareUpdateBusy = true;
         FirmwareCheckUpdatesButton.IsEnabled = false;
         FirmwareInstallUpdateButton.IsEnabled = false;
@@ -132,7 +145,22 @@ public sealed partial class MainWindow
                 FirmwareUpdateStatusText.Text =
                     $"正在从 GitHub 下载 {asset.Name}：{value:P0}");
             packagePath = await _firmwareReleaseService.DownloadAsync(asset,
-                progress, CancellationToken.None);
+                progress, _windowCancellation.Token);
+            if (_client is null || _module.Id != moduleId)
+                throw new InvalidOperationException("接收器已断开或更换，请重新检查更新。");
+            using (var archive = ZipFile.OpenRead(packagePath))
+            {
+                var manifest = archive.GetEntry("module.json") ??
+                    throw new InvalidDataException("固件包缺少模块清单。");
+                if (manifest.Length is <= 0 or > 1048576 ||
+                    archive.Entries.Count(entry => entry.FullName.Equals("module.json", StringComparison.OrdinalIgnoreCase)) != 1)
+                    throw new InvalidDataException("固件包模块清单无效。");
+                using var stream = manifest.Open();
+                using var document = JsonDocument.Parse(stream);
+                if (!document.RootElement.TryGetProperty("id", out var id) ||
+                    !string.Equals(id.GetString(), moduleId, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("固件包与当前接收器不匹配，已拒绝安装。");
+            }
             var installed = InstallModulePackageFromWizard(packagePath);
             RefreshFirmwareTargets();
             FirmwareUpdateStatusText.Text =
@@ -149,9 +177,9 @@ public sealed partial class MainWindow
             if (packagePath is not null && File.Exists(packagePath))
                 File.Delete(packagePath);
             _firmwareUpdateBusy = false;
-            FirmwareCheckUpdatesButton.IsEnabled = true;
+            FirmwareCheckUpdatesButton.IsEnabled = _client is not null;
             FirmwareInstallUpdateButton.IsEnabled =
-                FirmwareReleaseList.SelectedItem is GithubModuleAsset;
+                _client is not null && FirmwareReleaseList.SelectedItem is GithubModuleAsset;
             FirmwareUpdateProgress.IsActive = false;
             FirmwareUpdateProgress.Visibility = Visibility.Collapsed;
         }
@@ -272,6 +300,7 @@ public sealed partial class MainWindow
     private async void FirmwareFlash_Click(object sender, RoutedEventArgs e)
     {
         if (_firmwareFlashBusy || _firmwareSelection is null) return;
+        var selection = _firmwareSelection;
         var port = (FirmwarePortBox.SelectedItem as FirmwarePortItem)?.PortName;
         var check = _firmwareFlashService.Check(_firmwareSelection.Module,
             _firmwareSelection.Firmware, port);
@@ -300,7 +329,7 @@ public sealed partial class MainWindow
             var progress = new Progress<string>(message =>
                 FirmwareFlashStatusText.Text = message);
             var result = await _firmwareFlashService.FlashAsync(
-                _firmwareSelection.Module, _firmwareSelection.Firmware, port,
+                selection.Module, selection.Firmware, port,
                 progress, CancellationToken.None);
             FirmwareFlashStatusText.Text = result.Message;
             ShowFirmwareInfo(result.Message, !result.Success);

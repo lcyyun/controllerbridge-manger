@@ -2,6 +2,8 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$PackagePath,
+    [switch]$AllowLocalPreview,
+    [switch]$Installed,
     [switch]$LaunchSmoke
 )
 
@@ -75,9 +77,29 @@ $packageInfo = Get-Content -LiteralPath (Join-Path $root 'PACKAGE-INFO.txt') -Ra
 if ($packageInfo.Contains('Classic diagnostics bundled: True')) {
     [void](Get-ContainedFile -BasePath $root -RelativePath 'classic-manager\BridgeManager.App.exe')
 }
-[void]@(& (Join-Path $PSScriptRoot 'get-firmware-packages.ps1') `
-    -LockPath (Join-Path $root 'firmware-releases.lock.json') `
-    -SourceDirectory (Join-Path $root 'module-packages') -Offline)
+$localPath = Join-Path $root 'LOCAL-PREVIEW.json'
+if (Test-Path -LiteralPath $localPath) {
+    if (-not $AllowLocalPreview) { throw 'Local preview requires explicit -AllowLocalPreview verification.' }
+    $local = Get-Content -LiteralPath $localPath -Raw | ConvertFrom-Json
+    if ($local.schemaVersion -ne 1 -or $local.localPreview -ne $true -or
+        $local.hardwareTested -ne $false -or $local.moduleId -cne 'sf32-unified' -or
+        $local.asset -cnotmatch '^sf32-unified-[A-Za-z0-9._-]+\.cbmodule$' -or
+        $local.sha256 -cnotmatch '^[0-9a-f]{64}$') { throw 'Invalid local preview provenance.' }
+    $asset = Get-ContainedFile -BasePath $root -RelativePath "module-packages/$($local.asset)"
+    if ((Get-Item -LiteralPath $asset).Length -ne $local.size -or
+        (Get-FileHash -LiteralPath $asset).Hash -ine $local.sha256) {
+        throw 'Local SF32 archive does not match its recorded digest.'
+    }
+    foreach ($id in @('esp32s3-ns2-bridge', 'pico-unified-bridge')) {
+        [void]@(& (Join-Path $PSScriptRoot 'get-firmware-packages.ps1') `
+            -LockPath (Join-Path $root 'firmware-releases.lock.json') `
+            -SourceDirectory (Join-Path $root 'module-packages') -ModuleId $id -Offline)
+    }
+} else {
+    [void]@(& (Join-Path $PSScriptRoot 'get-firmware-packages.ps1') `
+        -LockPath (Join-Path $root 'firmware-releases.lock.json') `
+        -SourceDirectory (Join-Path $root 'module-packages') -Offline)
+}
 
 $pinnedProvenance = Join-Path $PSScriptRoot 'vendor\sftool\PROVENANCE.json'
 $pin = Get-Content -LiteralPath $pinnedProvenance -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -227,6 +249,10 @@ foreach ($line in Get-Content -LiteralPath $hashFile) {
     }
 }
 foreach ($file in Get-ChildItem -LiteralPath $root -Recurse -File -Force) {
+    if ($Installed -and $file.DirectoryName -eq $root -and
+        $file.Name -cin @('unins000.exe', 'unins000.dat')) {
+        continue
+    }
     if ($file.FullName -ne $hashFile -and -not $hashedFiles.Contains($file.FullName)) {
         throw "Package file is missing from SHA256SUMS.txt: $($file.FullName)"
     }

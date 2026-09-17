@@ -9,6 +9,7 @@ param(
     [string]$BlFlashRoot = $env:BRIDGE_MANAGER_BLFLASH_ROOT,
     [string]$ModulePackageDirectory,
     [string]$ClassicDirectory,
+    [string]$LocalSf32Module,
     [switch]$Offline,
     [switch]$SkipTests
 )
@@ -40,6 +41,50 @@ if (-not $outputDir.StartsWith($distPrefix, [StringComparison]::OrdinalIgnoreCas
 }
 $moduleSources = @(& (Join-Path $PSScriptRoot 'get-firmware-packages.ps1') `
     -SourceDirectory $ModulePackageDirectory -Offline:$Offline)
+$localPreview = $null
+if ($LocalSf32Module) {
+    if ($PackageName -eq 'BridgeManager-modern-win-x64') {
+        throw 'Local previews require a distinct PackageName; the released package must be preserved.'
+    }
+    $localFile = Get-Item -LiteralPath $LocalSf32Module
+    if ($localFile.PSIsContainer -or $localFile.Extension -cne '.cbmodule' -or
+        $localFile.Length -le 0 -or $localFile.Length -gt 512MB -or
+        $localFile.Name -cnotmatch '^sf32-unified-[A-Za-z0-9._-]+\.cbmodule$') {
+        throw 'LocalSf32Module must be a bounded SF32 module archive.'
+    }
+    $moduleSources = @($moduleSources | Where-Object ModuleId -ne 'sf32-unified') +
+        @([pscustomobject]@{ModuleId='sf32-unified'; Path=$localFile.FullName})
+    $localPreview = [ordered]@{
+        schemaVersion = 1
+        localPreview = $true
+        hardwareTested = $false
+        baselineLock = 'firmware-releases.lock.json'
+        description = 'Local SF32 artifact overrides the baseline release lock; not a published firmware release.'
+        moduleId = 'sf32-unified'
+        asset = $localFile.Name
+        size = $localFile.Length
+        sha256 = (Get-FileHash -LiteralPath $localFile.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+}
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+foreach ($source in $moduleSources) {
+    $zip = [IO.Compression.ZipFile]::OpenRead($source.Path)
+    try {
+        $entries = @($zip.Entries | Where-Object FullName -ceq 'module.json')
+        if ($entries.Count -ne 1 -or $entries[0].Length -gt 1MB) {
+            throw 'Module archive must contain one bounded module.json.'
+        }
+        $reader = [IO.StreamReader]::new($entries[0].Open())
+        try { $manifest = $reader.ReadToEnd() | ConvertFrom-Json }
+        finally { $reader.Dispose() }
+        $expected = Get-Content -LiteralPath (Join-Path $managerRoot `
+            "modules/$($source.ModuleId)/$($source.ModuleId).bridge-module.json") -Raw | ConvertFrom-Json
+        if (($manifest | ConvertTo-Json -Depth 100 -Compress) -cne
+            ($expected | ConvertTo-Json -Depth 100 -Compress)) {
+            throw "Module archive disagrees with the app's source manifest: $($source.ModuleId)"
+        }
+    } finally { $zip.Dispose() }
+}
 $classicSource = if ($ClassicDirectory) { [IO.Path]::GetFullPath($ClassicDirectory) } else { $null }
 if ($classicSource -and
     -not (Test-Path -LiteralPath (Join-Path $classicSource 'BridgeManager.App.exe') -PathType Leaf)) {
@@ -144,6 +189,10 @@ Copy-Item -LiteralPath (Join-Path $repositoryRoot 'LICENSE') `
     -Destination (Join-Path $outputDir 'LICENSE') -Force
 Copy-Item -LiteralPath (Join-Path $managerRoot 'firmware-releases.lock.json') `
     -Destination (Join-Path $outputDir 'firmware-releases.lock.json') -Force
+if ($localPreview) {
+    $localPreview | ConvertTo-Json -Depth 8 |
+        Set-Content -LiteralPath (Join-Path $outputDir 'LOCAL-PREVIEW.json') -Encoding UTF8
+}
 if ($classicSource) {
     Copy-Item -LiteralPath $classicSource `
         -Destination (Join-Path $outputDir 'classic-manager') -Recurse -Force
@@ -161,6 +210,7 @@ $packageInfo = @(
     'SF32 flash tool: tools/sftool/sftool.exe (pinned 0.1.16, Apache-2.0)'
     'BL616 flash tool: tools/blflash/BLFlashCommand.exe (pinned 1.4.3, Apache-2.0)'
     "Classic diagnostics bundled: $([bool]$classicSource)"
+    "Local unvalidated preview: $([bool]$localPreview)"
 ) -join [Environment]::NewLine
 Set-Content -LiteralPath (Join-Path $outputDir 'PACKAGE-INFO.txt') `
     -Value $packageInfo -Encoding UTF8
@@ -176,7 +226,8 @@ $hashLines = Get-ChildItem -LiteralPath $outputDir -Recurse -File -Force |
     }
 Set-Content -LiteralPath $hashFile -Value $hashLines -Encoding ASCII
 
-& (Join-Path $PSScriptRoot 'verify-modern-package.ps1') -PackagePath $outputDir
+& (Join-Path $PSScriptRoot 'verify-modern-package.ps1') -PackagePath $outputDir `
+    -AllowLocalPreview:([bool]$localPreview)
 if ($LASTEXITCODE -ne 0) { throw 'Modern package verification failed.' }
 
 Compress-Archive -Path (Join-Path $outputDir '*') -DestinationPath $zipPath `

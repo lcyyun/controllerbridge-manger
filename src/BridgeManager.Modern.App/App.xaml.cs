@@ -10,6 +10,13 @@ public partial class App : Application
 
     public App()
     {
+        UnhandledException += (_, args) => AppDiagnostics.Write("xaml-unhandled", args.Exception);
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            if (args.ExceptionObject is Exception error) AppDiagnostics.Write("unhandled", error);
+        };
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+            AppDiagnostics.Write("unobserved-task", args.Exception);
         InitializeComponent();
     }
 
@@ -70,9 +77,11 @@ public partial class App : Application
 
     private async Task RunShellSmokeAsync(string outputDirectory)
     {
+        var passed = false;
         try
         {
             await ((MainWindow)_window!).RunShellSmokeAsync(outputDirectory);
+            passed = true;
         }
         catch (Exception ex)
         {
@@ -82,8 +91,11 @@ public partial class App : Application
         }
         finally
         {
-            _window!.Close();
-            Exit();
+            if (!passed || !Environment.GetCommandLineArgs().Contains("--keep-open", StringComparer.Ordinal))
+            {
+                _window!.Close();
+                Exit();
+            }
         }
     }
 }
