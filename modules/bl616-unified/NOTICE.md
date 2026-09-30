@@ -108,6 +108,9 @@ The build uses Bouffalo Lab `bouffalo_sdk`, not SiFli SDK and not
   dependencies. Preserve all notices embedded in the vendored codec sources.
 - The RT-Thread compatibility layer maps the application API to FreeRTOS; it
   does not link a SiFli runtime.
+- The USB OTA verifier links the SDK's TinyCrypt SHA-256 and P-256 ECDSA.
+  Intel and Kenneth MacKay BSD notices are retained in
+  `LICENSES/TinyCrypt-BSD.txt` in firmware distributions and module packages.
 
 Firmware release packaging must retain the notices for linked SDK components,
 the Opus COPYING file and these source attributions. The SDK's flashing utility
