@@ -49,6 +49,47 @@ if (args.Length >= 3 && args[0] == "--command")
     return;
 }
 
+// Read-only/on-demand hardware diagnostic. Not exercised by the automated
+// suite and never changes receiver state unless the caller supplies a command
+// that does so.
+if (args.Length == 2 && args[0] == "--bl616-ota")
+{
+    var image = File.ReadAllBytes(args[1]);
+    var manifest = File.ReadAllBytes(args[1] + ".manifest");
+    var factory = new BridgeTransportFactory();
+    var devices = await factory.GetDevicesAsync(CancellationToken.None);
+    var descriptor = devices.Single(device =>
+        device.TransportKind == DeviceTransportKind.Hid &&
+        device.ProfileKey?.StartsWith("bl616-", StringComparison.OrdinalIgnoreCase) == true);
+    await using var transport = await factory.OpenAsync(descriptor, CancellationToken.None);
+    var client = new ManagerCommandClient(transport);
+    var lastPercent = -1;
+    var progress = new Progress<double>(value =>
+    {
+        var percent = (int)(value * 100);
+        if (percent / 5 != lastPercent / 5) { Console.WriteLine($"OTA transfer {percent}%"); lastPercent = percent; }
+    });
+    await new Bl616UsbOtaService().UpdateAsync(client, manifest, image, progress);
+    Console.WriteLine("OTA verified/activated; receiver reboot requested. Check the new build after re-enumeration.");
+    return;
+}
+
+if (args.Length >= 2 && args[0] == "--hid-command")
+{
+    var factory = new BridgeTransportFactory();
+    var devices = await factory.GetDevicesAsync(CancellationToken.None);
+    var descriptor = devices.FirstOrDefault(device =>
+        device.TransportKind == DeviceTransportKind.Hid &&
+        device.ProfileKey?.StartsWith("bl616-", StringComparison.OrdinalIgnoreCase) == true) ??
+        throw new InvalidOperationException("No BL616 manager HID interface found.");
+    await using var transport = await factory.OpenAsync(descriptor, CancellationToken.None);
+    var client = new ManagerCommandClient(transport);
+    using var reply = await client.SendCommandAsync(string.Join(' ', args.Skip(1)),
+                                                     CancellationToken.None);
+    Console.WriteLine(reply.RootElement.GetRawText());
+    return;
+}
+
 if (args.Length >= 2 && args[0] == "--flash-check")
 {
     var registry = new BridgeFirmwareModuleRegistry();
@@ -171,6 +212,7 @@ if (args.Length >= 2 && args[0] == "--hid-raw")
 var tests = new (string Name, Action Run)[]
 {
     ("validates manager update channels, versions and origin", ManagerUpdateSelection),
+    ("validates BL616 OTA frames, signatures and replay rejection", Bl616OtaTests.Run),
     ("builds Windows feature command payload", BuildsWindowsFeatureCommandPayload),
     ("builds output command payload", BuildsOutputCommandPayload),
     ("parses reply with report id", ParsesReplyWithReportId),

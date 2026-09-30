@@ -4,7 +4,7 @@
   "operations": {},
   "pages": [],
   "id": "bl616-unified",
-  "moduleVersion": "0.1.0",
+  "moduleVersion": "0.2.0-preview.1",
   "displayName": "ControllerBridge BL616",
   "boardFamily": "Bouffalo Lab BL616",
   "description": "BL616 上统一接收 DualSense 与 Nintendo NS2Pro。",
@@ -56,7 +56,7 @@
   "firmware": [
     {
       "id": "bl616-unified-current", "displayName": "ControllerBridge BL616",
-      "version": "0.1.0",
+      "version": "0.2.0-dev",
       "description": "DS5 Classic、NS2Pro BLE、震动、扳机与 USB Audio。",
       "boardIds": ["bl616-devkit"], "flashMethod": "BouffaloUart",
       "artifactRelativePath": "artifacts/blflash.json",
@@ -84,7 +84,7 @@
       "forgetCommand": "forget ns2"
     }
   ],
-  "statusCommands": ["bridge status", "usb status", "settings", "rumble"],
+  "statusCommands": ["bridge status", "version", "usb status", "settings", "rumble"],
   "selfTestCommands": ["bridge status", "usb status", "settings", "rumble", "bridge input", "motion status", "ns2 status"],
   "primaryStatusCommand": "bridge status",
   "inputStatusCommand": "bridge input",

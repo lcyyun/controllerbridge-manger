@@ -51,6 +51,11 @@ foreach ($filePin in $pin.supportFiles) {
 }
 $sdkRoot = [IO.Path]::GetFullPath((Join-Path $sourceRoot '..\..\..'))
 $sourceLicense = Join-Path $sdkRoot $pin.license.sourceFileName
+if (-not (Test-Path -LiteralPath $sourceLicense -PathType Leaf)) {
+    # A previously verified Manager package is also a valid immutable source.
+    # Its license is beside the executable rather than at an SDK root.
+    $sourceLicense = Join-Path $sourceRoot $pin.license.fileName
+}
 Assert-PinnedFile -Path $sourceLicense -Pin $pin.license
 Copy-Item -LiteralPath $sourceLicense `
     -Destination (Join-Path $destinationRoot $pin.license.fileName) -Force

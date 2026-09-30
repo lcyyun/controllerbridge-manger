@@ -130,4 +130,44 @@ public sealed class ManagerCommandClient
         throw new ManagerCommandException(
             "manager reply was not ready or remained incomplete");
     }
+
+    public async Task<JsonDocument> SendBl616OtaPacketAsync(
+        Bl616OtaOperation operation, ushort sequence, uint offset,
+        ReadOnlyMemory<byte> payload, CancellationToken cancellationToken = default)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        await _commandLock.WaitAsync(timeout.Token).ConfigureAwait(false);
+        try
+        {
+            var reportId = _transport.Descriptor.ManagerFeatureReportId;
+            var packet = Bl616OtaProtocol.BuildPacket(operation, sequence, offset, payload.Span);
+            // Retrying the exact packet is idempotent in the firmware, including
+            // FINISH. Do not advance the counter until its ACK is received.
+            for (var retry = 0; retry < 4; retry++)
+            {
+                await _transport.WriteFeatureReportAsync(reportId, packet, timeout.Token).ConfigureAwait(false);
+                for (var attempt = 0; attempt < 30; attempt++)
+                {
+                    await Task.Delay(10, timeout.Token).ConfigureAwait(false);
+                    string json;
+                    try { json = await ReadJsonReplyAsync(reportId, timeout.Token).ConfigureAwait(false); }
+                    catch (ManagerCommandException) { break; }
+                    var reply = JsonDocument.Parse(json);
+                    if (reply.RootElement.TryGetProperty("ota", out var ota) && ota.ValueKind == JsonValueKind.True &&
+                        reply.RootElement.TryGetProperty("seq", out var seq) && seq.GetUInt16() == sequence &&
+                        reply.RootElement.TryGetProperty("op", out var op) && op.GetByte() == (byte)operation &&
+                        reply.RootElement.TryGetProperty("offset", out var ackOffset) && ackOffset.GetUInt32() == offset)
+                        return reply;
+                    reply.Dispose();
+                }
+            }
+            throw new TimeoutException("BL616 OTA acknowledgement was not received.");
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException("BL616 OTA acknowledgement timed out.");
+        }
+        finally { _commandLock.Release(); }
+    }
 }

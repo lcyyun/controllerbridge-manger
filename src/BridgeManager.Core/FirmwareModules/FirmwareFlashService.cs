@@ -81,6 +81,27 @@ public sealed class FirmwareFlashService
         }
     }
 
+    public static string? ResolveBl616OtaArtifact(
+        IBridgeFirmwareModule module, BridgeFirmwareDefinition firmware)
+    {
+        if (module.Id != "bl616-unified" || firmware.FlashMethod != FirmwareFlashMethod.BouffaloUart)
+            return null;
+        var bundlePath = ResolveArtifact(module, firmware);
+        if (bundlePath is null) return null;
+        try
+        {
+            var main = ReadBouffaloBundle(bundlePath).Files.Single(file => file.Kind == "firmware").Path;
+            var ota = main + ".ota";
+            return File.Exists(ota) && File.Exists(ota + ".manifest") &&
+                new FileInfo(ota).Length is > 512 and <= 0x168200 &&
+                new FileInfo(ota + ".manifest").Length == 160 ? ota : null;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            return null;
+        }
+    }
+
     public FirmwareFlashPreflight Check(
         IBridgeFirmwareModule module,
         BridgeFirmwareDefinition firmware,

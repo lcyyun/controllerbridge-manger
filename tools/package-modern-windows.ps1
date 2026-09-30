@@ -184,8 +184,10 @@ foreach ($notice in @('LICENSE', 'NOTICE.md', 'LICENSES')) {
     Copy-Item -LiteralPath (Join-Path $managerRoot "modules/bl616-unified/$notice") `
         -Destination $blModuleRoot -Recurse -Force
 }
+$blModuleVersion = (Get-Content -LiteralPath (Join-Path $blModuleRoot 'module.json') -Raw |
+    ConvertFrom-Json).moduleVersion
 & (Join-Path $PSScriptRoot 'pack-module-directory.ps1') -SourceDirectory $blModuleRoot `
-    -OutputPath (Join-Path $modulePackageRoot 'bl616-unified-0.1.0.cbmodule')
+    -OutputPath (Join-Path $modulePackageRoot "bl616-unified-$blModuleVersion.cbmodule")
 
 Copy-Item -LiteralPath (Join-Path $managerRoot 'README.md') `
     -Destination (Join-Path $outputDir 'README.md') -Force

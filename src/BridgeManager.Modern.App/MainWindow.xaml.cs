@@ -506,7 +506,7 @@ public sealed partial class MainWindow
 
     private async void PollTimer_Tick(object? sender, object e)
     {
-        if (_inputClosing || _polling || _client is null || _reconnecting) return;
+        if (_inputClosing || _polling || _client is null || _reconnecting || _firmwareFlashBusy) return;
         _polling = true;
         try
         {

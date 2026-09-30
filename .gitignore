@@ -17,3 +17,6 @@ test-results/
 *.pfx
 *.pem
 *.key
+*.p8
+*.ota
+*.ota.manifest

@@ -465,6 +465,8 @@
                                     <TextBlock Text="Manager 当前提供 ControllerBridge BL616 与 SF32LB52 的校验烧录。" Style="{StaticResource QuietCaptionStyle}" TextWrapping="Wrap" />
                                     <ComboBox x:Name="FirmwareBoardBox" Header="目标板卡" DisplayMemberPath="DisplayName" HorizontalAlignment="Stretch" SelectionChanged="FirmwareBoardBox_SelectionChanged" />
                                     <ComboBox x:Name="FirmwareImageBox" Header="固件镜像" DisplayMemberPath="DisplayName" HorizontalAlignment="Stretch" SelectionChanged="FirmwareImageBox_SelectionChanged" />
+                                    <Button x:Name="FirmwareUsbOtaButton" Content="通过 USB 更新 BL616" Click="FirmwareUsbOta_Click" IsEnabled="False" HorizontalAlignment="Left" />
+                                    <TextBlock Text="支持 OTA 的 BL616 可直接更新，无需下载串口。固件包必须包含合法签名；旧固件首次使用仍需下面的 ROM 烧录。" Style="{StaticResource QuietCaptionStyle}" TextWrapping="Wrap" />
                                     <Grid ColumnSpacing="8">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                         <ComboBox x:Name="FirmwarePortBox" Header="下载串口" DisplayMemberPath="DisplayName" HorizontalAlignment="Stretch" PlaceholderText="选择下载串口" SelectionChanged="FirmwarePortBox_SelectionChanged" />

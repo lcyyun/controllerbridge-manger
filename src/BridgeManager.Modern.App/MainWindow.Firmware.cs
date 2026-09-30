@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using BridgeManager.Core.FirmwareModules;
+using BridgeManager.Core.Protocol;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Devices.Enumeration;
@@ -44,6 +45,7 @@ public sealed partial class MainWindow
             boards.FirstOrDefault();
         FirmwareCheckUpdatesButton.IsEnabled = connectedModule is not null &&
                                                 !_firmwareUpdateBusy;
+        RefreshUsbOtaButton();
         if (connectedModule is null)
         {
             FirmwareReleaseList.ItemsSource = null;
@@ -203,6 +205,7 @@ public sealed partial class MainWindow
         SelectionChangedEventArgs e)
     {
         _firmwareSelection = FirmwareImageBox.SelectedItem as WizardFirmwareChoice;
+        RefreshUsbOtaButton();
         FirmwareFlashButton.IsEnabled = false;
         if (_firmwareSelection is null)
         {
@@ -234,6 +237,91 @@ public sealed partial class MainWindow
 
     private async void FirmwareRefreshPorts_Click(object sender, RoutedEventArgs e)
         => await RefreshFirmwarePortsAsync();
+
+    private void RefreshUsbOtaButton()
+    {
+        if (FirmwareUsbOtaButton is null) return;
+        FirmwareUsbOtaButton.IsEnabled = !_firmwareFlashBusy && !_firmwareUpdateBusy &&
+            _client is not null && _module.Id == "bl616-unified" &&
+            _firmwareSelection is not null &&
+            FirmwareFlashService.ResolveBl616OtaArtifact(
+                _firmwareSelection.Module, _firmwareSelection.Firmware) is not null;
+    }
+
+    private async void FirmwareUsbOta_Click(object sender, RoutedEventArgs e)
+    {
+        if (_firmwareFlashBusy || _firmwareUpdateBusy || _client is null ||
+            _lastDescriptor is null || _module.Id != "bl616-unified" || _firmwareSelection is null) return;
+        var path = FirmwareFlashService.ResolveBl616OtaArtifact(
+            _firmwareSelection.Module, _firmwareSelection.Firmware);
+        if (path is null) return;
+        var client = _client;
+        var descriptor = _lastDescriptor;
+        var connectionGeneration = _connectionGeneration;
+        uint expectedBuild = 0;
+        SetFirmwareBusy(true);
+        _pollTimer.Stop();
+        try
+        {
+            // Let an already-running status read complete before taking over.
+            for (var attempt = 0; _polling && attempt < 100; attempt++)
+                await Task.Delay(100, _windowCancellation.Token);
+            if (_polling || client != _client) throw new IOException("管理连接尚未就绪，请重试。");
+            using var version = await client.SendCommandAsync("version", _windowCancellation.Token);
+            if (!version.RootElement.TryGetProperty("hardware", out var hardware) ||
+                hardware.GetString() != "CB-BL616" ||
+                !version.RootElement.TryGetProperty("firmware_build_number", out var build))
+                throw new InvalidDataException("当前接收器尚不支持 USB OTA，请先通过 ROM 下载口烧录一次新版固件。");
+            var image = await File.ReadAllBytesAsync(path, _windowCancellation.Token);
+            var manifest = await File.ReadAllBytesAsync(path + ".manifest", _windowCancellation.Token);
+            expectedBuild = Bl616OtaProtocol.ValidatePackage(manifest, image, build.GetUInt32());
+            var dialog = new ContentDialog
+            {
+                XamlRoot = Content.XamlRoot,
+                Title = "通过 USB 更新 BL616",
+                Content = $"当前编译号：{build.GetUInt32()}\n目标编译号：{expectedBuild}\n\n已验证 BL616 身份、镜像哈希及发行签名。更新会暂时断开手柄，完成后接收器重启。请勿拔线或断电。",
+                PrimaryButtonText = "开始 USB 更新", CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Close,
+            };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+            if (client != _client || connectionGeneration != _connectionGeneration)
+                throw new IOException("接收器已断开或更换，请重新检查。");
+            var progress = new Progress<double>(value =>
+                FirmwareFlashStatusText.Text = $"USB OTA 写入未运行分区：{value:P0}");
+            await new Bl616UsbOtaService().UpdateAsync(client, manifest, image, progress, _windowCancellation.Token);
+            FirmwareFlashStatusText.Text = "镜像已校验，正在等待新固件启动...";
+            await RecoverConnectionAsync(descriptor, "USB OTA 完成", immediateDelayMs: 1500);
+            if (_client is null) throw new IOException("更新已提交，但 USB 未重新出现；请重插接收器后检查版本。");
+            // The trial firmware confirms itself after ten healthy seconds.
+            await Task.Delay(12000, _windowCancellation.Token);
+            using var after = await _client.SendCommandAsync("version", _windowCancellation.Token);
+            if (!after.RootElement.TryGetProperty("hardware", out var afterHardware) ||
+                afterHardware.GetString() != "CB-BL616" ||
+                !after.RootElement.TryGetProperty("firmware_build_number", out var afterBuild) ||
+                afterBuild.GetUInt32() != expectedBuild)
+                throw new IOException("重启后的版本不匹配，更新未生效或已回退，请查看日志。");
+            using var bootStatus = await _client.SendCommandAsync("ota status", _windowCancellation.Token);
+            if (!bootStatus.RootElement.TryGetProperty("current_build", out var confirmedBuild) ||
+                confirmedBuild.GetUInt32() != expectedBuild ||
+                !bootStatus.RootElement.TryGetProperty("boot_confirmed", out var confirmed) ||
+                !confirmed.GetBoolean() ||
+                !bootStatus.RootElement.TryGetProperty("trial", out var trial) || trial.GetBoolean())
+                throw new IOException("新固件尚未通过启动健康检查；暂不标记更新成功，请保持供电并检查接收器状态。");
+            FirmwareFlashStatusText.Text = $"USB OTA 完成，运行编译号 {expectedBuild}。";
+            ShowFirmwareInfo(FirmwareFlashStatusText.Text, false);
+        }
+        catch (Exception ex)
+        {
+            FirmwareFlashStatusText.Text = $"USB OTA 未完成：{ex.Message}";
+            ShowFirmwareInfo(FirmwareFlashStatusText.Text, true);
+        }
+        finally
+        {
+            SetFirmwareBusy(false);
+            RefreshUsbOtaButton();
+            if (_client is not null && !_inputClosing) _pollTimer.Start();
+        }
+    }
 
     private async Task RefreshFirmwarePortsAsync()
     {
@@ -349,9 +437,10 @@ public sealed partial class MainWindow
         foreach (var control in new Control[] { FirmwareBoardBox,
                      FirmwareImageBox, FirmwarePortBox, FirmwareRefreshPortsButton,
                      FirmwarePreflightButton, FirmwareCheckUpdatesButton,
-                     FirmwareInstallUpdateButton })
+                     FirmwareInstallUpdateButton, FirmwareUsbOtaButton })
             control.IsEnabled = !busy;
         FirmwareFlashButton.IsEnabled = false;
+        if (!busy) RefreshUsbOtaButton();
         FirmwareFlashProgress.IsActive = busy;
         FirmwareFlashProgress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
     }
