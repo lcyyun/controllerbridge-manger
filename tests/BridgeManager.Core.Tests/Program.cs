@@ -308,6 +308,12 @@ var tests = new (string Name, Action Run)[]
 
 static void ManagerUpdateSelection()
 {
+    var appVersion = System.Xml.Linq.XDocument.Load(Path.Combine(
+        Environment.CurrentDirectory, "src", "BridgeManager.Modern.App", "BridgeManager.Modern.App.csproj"))
+        .Descendants("Version").Single().Value;
+    AssertEqual(appVersion, ManagerReleaseService.CurrentVersion);
+    AssertEqual(true, ManagerUpdateService.CurrentTag.StartsWith(
+        "v" + ManagerUpdateService.CurrentVersion + "-", StringComparison.Ordinal));
     string Feed(string tag, bool preview = true, string? url = null, string? digest = null)
     {
         var version = tag.TrimStart('v').Split('-')[0];

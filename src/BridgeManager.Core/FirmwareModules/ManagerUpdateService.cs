@@ -10,8 +10,8 @@ public sealed record ManagerUpdate(string Tag, Version Version, bool Prerelease,
 
 public sealed class ManagerUpdateService
 {
-    public const string CurrentTag = "v0.3.3-preview.1";
-    public static readonly Version CurrentVersion = new(0, 3, 2);
+    public const string CurrentTag = "v" + ManagerReleaseService.CurrentVersion;
+    public static readonly Version CurrentVersion = new(ManagerReleaseService.CurrentVersion.Split('-')[0]);
     private const string Repository = "https://github.com/lcyyun/controllerbridge-manger/";
     private const long MaximumBytes = 512L * 1024 * 1024;
     private static readonly HttpClient Client = CreateClient();
