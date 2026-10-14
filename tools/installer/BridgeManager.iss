@@ -24,6 +24,7 @@ OutputBaseFilename=ControllerBridge-Setup-{#AppVersion}-win-x64
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile={#PackageDir}\Assets\ControllerBridge.ico
 UninstallDisplayIcon={app}\BridgeManager.Modern.App.exe
 CloseApplications=yes
 RestartApplications=no

@@ -44,7 +44,7 @@
                         <ColumnDefinition Width="24" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <FontIcon Glyph="&#xE7FC;" FontSize="22" Foreground="{ThemeResource BridgeAccentInkBrush}" VerticalAlignment="Top" Margin="0,4,0,0" />
+                    <Image Source="Assets/ControllerBridge.png" Width="24" Height="24" VerticalAlignment="Top" Margin="0,3,0,0" AutomationProperties.Name="ControllerBridge" />
                     <StackPanel Grid.Column="1" Spacing="3">
                         <TextBlock Text="Controller Bridge" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" />
                         <TextBlock x:Name="ModulePaneText" Text="通用管理器" Style="{StaticResource QuietCaptionStyle}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />

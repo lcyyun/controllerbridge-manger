@@ -208,6 +208,7 @@ public sealed class Bl616UnifiedFirmwareModule : BridgeFirmwareModuleBase
     public override IReadOnlyList<BridgeDeviceProfile> HidDevices =>
     [
         BridgeDeviceProfiles.Bl616Xbox360,
+        BridgeDeviceProfiles.Bl616XInputPreview,
         BridgeDeviceProfiles.Bl616DualSense,
         BridgeDeviceProfiles.Bl616DualSenseEdge,
         BridgeDeviceProfiles.Bl616NintendoNs2Pro
@@ -248,7 +249,7 @@ public sealed class Bl616UnifiedFirmwareModule : BridgeFirmwareModuleBase
     public override string? SaveSettingsCommand => ManagerCommands.SaveSettings;
 
     public override bool Matches(DeviceDescriptor descriptor) =>
-        descriptor.ProfileKey is "bl616-xbox360" or "bl616-dualsense" or
+        descriptor.ProfileKey is "bl616-xbox360" or "bl616-xinput-preview" or "bl616-dualsense" or
             "bl616-dualsense-edge" or "bl616-ns2pro-nintendo";
 
     public override IReadOnlyList<string> BuildSettingsCommands(

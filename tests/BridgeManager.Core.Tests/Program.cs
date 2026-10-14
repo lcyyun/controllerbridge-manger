@@ -34,6 +34,17 @@ if (args.Length == 1 && args[0] == "--list-local")
     return;
 }
 
+// Read-only receiver inventory; does not open HID/serial transports.
+if (args.Length == 1 && args[0] == "--manager-devices")
+{
+    var devices = await new WindowsHidTransportFactory()
+        .GetDevicesAsync(CancellationToken.None);
+    foreach (var device in devices)
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(device));
+    Console.WriteLine($"MANAGER-DEVICES count={devices.Count}");
+    return;
+}
+
 if (args.Length >= 3 && args[0] == "--command")
 {
     var descriptor = new DeviceDescriptor(
@@ -52,6 +63,15 @@ if (args.Length >= 3 && args[0] == "--command")
 // Read-only/on-demand hardware diagnostic. Not exercised by the automated
 // suite and never changes receiver state unless the caller supplies a command
 // that does so.
+if (args.Length is 3 or 4 && args[0] == "--bl616-monitor")
+{
+    if (args.Length == 4 && args[3] != "--usb-only")
+        throw new ArgumentException("The only optional monitor flag is --usb-only.");
+    await Bl616HardwareMonitor.RunAsync(args[1], int.Parse(args[2]),
+        pollStatus: args.Length == 3);
+    return;
+}
+
 if (args.Length == 2 && args[0] == "--bl616-ota")
 {
     var image = File.ReadAllBytes(args[1]);
@@ -211,6 +231,7 @@ if (args.Length >= 2 && args[0] == "--hid-raw")
 
 var tests = new (string Name, Action Run)[]
 {
+    ("gates experimental XInput discovery on explicit ID and exact serial", TestsBl616XInputExperiment),
     ("validates manager update channels, versions and origin", ManagerUpdateSelection),
     ("validates BL616 OTA frames, signatures and replay rejection", Bl616OtaTests.Run),
     ("builds Windows feature command payload", BuildsWindowsFeatureCommandPayload),
@@ -267,7 +288,9 @@ var tests = new (string Name, Action Run)[]
     ("tests independent local controller decoding and lifecycle without physical devices", LocalControllerTests.Run),
     ("matches current and legacy Sony manager identities", MatchesSonyManagerIdentities),
     ("known profiles have unique profile keys", KnownProfilesHaveUniqueProfileKeys),
+    ("prefers verified receiver identities over generic HID profiles", PrefersVerifiedReceiverIdentities),
     ("decodes DS5 USB input reports", DecodesDs5UsbInput),
+    ("normalizes receiver DualSense stick directions without changing wire reports", NormalizesDs5UsbStickDirections),
     ("decodes NS2 USB input reports", DecodesNs2UsbInput),
     ("builds full test commands", BuildsFullTestCommands),
     ("maps supported USB roles and two physical inputs", MapsRolesAndInputs),
@@ -415,7 +438,7 @@ static void LoadsBundledBl616Manifest()
         "bl616-unified", "bl616-unified.bridge-module.json");
     var module = BridgeModulePackageLoader.LoadFile(path);
     AssertEqual("bl616-unified", module.Id);
-    AssertEqual(4, module.HidDevices.Count);
+    AssertEqual(5, module.HidDevices.Count);
     AssertEqual(0, module.InputSources.Count);
     AssertEqual(false,
         module.Capabilities.Has(BridgeCapability.InputSourceSelection));
@@ -1510,6 +1533,7 @@ static void DecodesDs5UsbInput()
     AssertEqual(-32768, input.LeftX);
     AssertEqual(0, input.LeftY);
     AssertEqual(32767, input.RightX);
+    AssertEqual(16384, input.RightY);
     AssertEqual(true, (input.Buttons & (1u << 0)) != 0);
     AssertEqual(true, (input.Buttons & (1u << 7)) != 0);
     AssertEqual(true, (input.Buttons & (1u << 20)) != 0);
@@ -1518,6 +1542,45 @@ static void DecodesDs5UsbInput()
     AssertEqual(303, input.GyroZ);
     AssertEqual(-22, input.AccelY);
     AssertEqual(50, input.BatteryPercent.GetValueOrDefault());
+}
+
+static void NormalizesDs5UsbStickDirections()
+{
+    var report = new byte[64];
+    report[0] = 0x01;
+    report[8] = 0x08; // Neutral D-pad.
+    int previousX = int.MinValue, previousY = int.MaxValue;
+    for (var value = 0; value <= 255; value++)
+    {
+        report[1] = report[2] = report[3] = report[4] = (byte)value;
+        var original = report.ToArray();
+        AssertEqual(true, ControllerInputDecoder.TryDecode(0x01, report, out var input));
+        AssertEqual(true, ControllerInputDecoder.TryDecode(0x01, report.AsSpan(1), out var bodyInput));
+        AssertEqual(input, bodyInput);
+        AssertEqual(true, report.AsSpan().SequenceEqual(original));
+        AssertEqual(true, input!.LeftX >= previousX && input.LeftY <= previousY);
+        AssertEqual(true, input.LeftX is >= -32768 and <= 32767);
+        AssertEqual(true, input.LeftY is >= -32768 and <= 32767);
+        AssertEqual(input.LeftX, input.RightX);
+        AssertEqual(input.LeftY, input.RightY);
+        switch (value)
+        {
+            case 0:
+                AssertEqual(-32768, input.LeftX);
+                AssertEqual(32767, input.LeftY);
+                break;
+            case 128:
+                AssertEqual(0, input.LeftX);
+                AssertEqual(0, input.LeftY);
+                break;
+            case 255:
+                AssertEqual(32767, input.LeftX);
+                AssertEqual(-32768, input.LeftY);
+                break;
+        }
+        previousX = input.LeftX;
+        previousY = input.LeftY;
+    }
 }
 
 static void DecodesNs2UsbInput()
@@ -1680,6 +1743,61 @@ static void KnownProfilesHaveUniqueProfileKeys()
         .Distinct()
         .Count();
     AssertEqual(BridgeDeviceProfiles.All.Count, uniqueCount);
+}
+
+static void PrefersVerifiedReceiverIdentities()
+{
+    BridgeDeviceProfile Select(ushort vid, ushort pid, string? serial, string? product) =>
+        WindowsHidTransportFactory.OrderProfilesForDiscovery(BridgeDeviceProfiles.All)
+            .First(profile => profile.Matches(vid, pid) &&
+                profile.MatchesManagerIdentity(serial, product));
+
+    AssertEqual("bl616-ns2pro-nintendo", Select(0x057e, 0x2069, "CB616NS2-0002", "HID Interface").Key);
+    AssertEqual("bl616-xbox360", Select(0x045e, 0x028e, "BL616X360", null).Key);
+    AssertEqual("bl616-dualsense", Select(0x054c, 0x0ce6, "ControllerBridge BL616", "DualSense Wireless Controller").Key);
+    AssertEqual("bl616-dualsense-edge", Select(0x054c, 0x0df2, "ControllerBridge BL616 Edge", null).Key);
+    AssertEqual("ns2pro-nintendo", Select(0x057e, 0x2069, "OTHER-RECEIVER", "HID Interface").Key);
+    AssertEqual("sf32lb52-xbox360", Select(0x045e, 0x028e, null, null).Key);
+    AssertEqual("dualsense", Select(0x054c, 0x0ce6, "DualSense HID", null).Key);
+    AssertEqual("pico-dualsense", Select(0x054c, 0x0ce6, null, "Pico 2 W DualSense HID").Key);
+
+    var generic = BridgeDeviceProfiles.NintendoNs2Pro;
+    var serialOnly = generic with { Key = "serial", ManagerSerialNumber = "CUSTOM" };
+    var productOnly = generic with { Key = "product", LegacyManagerProductName = "CUSTOM HID" };
+    AssertEqual("serial,product,ns2pro-nintendo", string.Join(',',
+        WindowsHidTransportFactory.OrderProfilesForDiscovery([generic, productOnly, serialOnly])
+            .Select(profile => profile.Key)));
+}
+
+static void TestsBl616XInputExperiment()
+{
+    AssertEqual<BridgeDeviceProfile?>(null, Bl616XInputExperiment.ParseProfile(null));
+    AssertEqual<BridgeDeviceProfile?>(null, Bl616XInputExperiment.ParseProfile(""));
+    var original = BridgeDeviceProfiles.All;
+    var bundled = original.Single(p => p.VendorId == 0xfffe && p.ProductId == 0xcb16);
+    AssertEqual(true, bundled.MatchesManagerIdentity("CB616XINPUT-TEST-0001", null));
+    AssertEqual(false, bundled.MatchesManagerIdentity("OTHER", "Bridge Management"));
+    AssertEqual(false, bundled.SupportsInputReports);
+    AssertEqual(original.Count, Bl616XInputExperiment.Append(original, null).Count());
+    var profile = Bl616XInputExperiment.ParseProfile("FFFE:CB16")!;
+    AssertEqual((ushort)0xfffe, profile.VendorId);
+    AssertEqual((ushort)0xcb16, profile.ProductId);
+    AssertEqual(true, profile.MatchesManagerIdentity("CB616XINPUT-TEST-0001", null));
+    AssertEqual(false, profile.MatchesManagerIdentity("OTHER", "ControllerBridge XInput Experiment"));
+    AssertEqual(false, profile.SupportsInputReports);
+    AssertEqual((byte)0x7f, profile.ManagerFeatureReportId);
+    var descriptor = new DeviceDescriptor("lab", profile.DisplayName, profile.VendorId,
+        profile.ProductId, DeviceTransportKind.Hid, profile.DisplayName, true, false,
+        UsbRole: profile.UsbRole, ProfileKey: profile.Key, SerialNumber: profile.ManagerSerialNumber);
+    AssertEqual("bl616-unified", new BridgeFirmwareModuleRegistry().Resolve(descriptor).Id);
+    foreach (var value in new[] { "FFFE", "FFFE:CB16:0001", "0000:CB16", "FFFF:CB16",
+                 "FFFE:0000", "FFFE:FFFF", "045E:028E", "ZZZZ:CB16", "0xFFFE:CB16" })
+    {
+        var rejected = false;
+        try { Bl616XInputExperiment.ParseProfile(value); }
+        catch (ArgumentException) { rejected = true; }
+        AssertEqual(true, rejected);
+    }
 }
 
 static BridgeDeviceProfile RequireProfile(ushort vendorId, ushort productId)

@@ -1,5 +1,6 @@
 namespace BridgeManager.Core;
 
+// All sources use right-positive X and up-positive Y for stick display.
 public sealed record ControllerInputSnapshot(
     string Source,
     uint Buttons,
@@ -87,8 +88,8 @@ public static class ControllerInputDecoder
                           gyroX != 0 || gyroY != 0 || gyroZ != 0;
         return new ControllerInputSnapshot(
             "DS5 USB input", buttons,
-            AxisFromByte(body[0]), AxisFromByte(body[1]),
-            AxisFromByte(body[2]), AxisFromByte(body[3]),
+            AxisFromByte(body[0]), UpAxisFromByte(body[1]),
+            AxisFromByte(body[2]), UpAxisFromByte(body[3]),
             body[4] * 257, body[5] * 257,
             accelX, accelY, accelZ, gyroX, gyroY, gyroZ,
             motionValid, batteryLevel <= 10 ? batteryLevel * 10 : null);
@@ -174,6 +175,12 @@ public static class ControllerInputDecoder
     private static int AxisFromByte(byte value) => value >= 128
         ? (int)(((long)(value - 128) * 32767 + 63) / 127)
         : -(int)(((long)(128 - value) * 32768 + 64) / 128);
+
+    // DualSense wire Y is down-positive. Normalize here for both receivers
+    // and direct local controllers, preserving the full asymmetric range.
+    private static int UpAxisFromByte(byte value) => value <= 128
+        ? ((128 - value) * 32767 + 64) / 128
+        : -((value - 128) * 32768 + 63) / 127;
 
     private static int AxisFrom12(int value) => value >= 2048
         ? (int)(((long)(value - 2048) * 32767 + 1023) / 2047)

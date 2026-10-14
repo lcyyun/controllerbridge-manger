@@ -64,6 +64,7 @@ public sealed partial class SetupWizardWindow
         _prepareFlashAsync = prepareFlashAsync ?? (() => Task.CompletedTask);
         _discoverDevices = discoverDevices;
         InitializeComponent();
+        AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "ControllerBridge.ico"));
         WizardLayout.SizeChanged += WizardLayout_SizeChanged;
         PageScrolling.Attach(WizardScroller);
         AppWindow.Resize(new SizeInt32(1040, 760));

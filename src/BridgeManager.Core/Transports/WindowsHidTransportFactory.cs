@@ -18,7 +18,8 @@ public sealed class WindowsHidTransportFactory : IDeviceTransportFactory
     private IReadOnlyList<DeviceDescriptor> GetDevices(CancellationToken cancellationToken)
     {
         var descriptors = new List<DeviceDescriptor>();
-        foreach (var profile in _profiles())
+        foreach (var profile in OrderProfilesForDiscovery(Bl616XInputExperiment.Append(
+                     _profiles(), Environment.GetEnvironmentVariable(Bl616XInputExperiment.EnvironmentKey))))
         {
             cancellationToken.ThrowIfCancellationRequested();
             foreach (var device in FindDevices(profile))
@@ -51,6 +52,14 @@ public sealed class WindowsHidTransportFactory : IDeviceTransportFactory
             .ToArray();
         return result;
     }
+
+    // A receiver can match both an identity-specific profile and a generic
+    // VID/PID profile. Deduplication keeps the first match, so prefer verified
+    // serial/product identities without excluding legacy generic receivers.
+    internal static IEnumerable<BridgeDeviceProfile> OrderProfilesForDiscovery(
+        IEnumerable<BridgeDeviceProfile> profiles) => profiles
+        .OrderByDescending(profile => profile.ManagerSerialNumber is not null)
+        .ThenByDescending(profile => profile.LegacyManagerProductName is not null);
 
     public Task<IDeviceTransport> OpenAsync(DeviceDescriptor descriptor,
                                              CancellationToken cancellationToken)

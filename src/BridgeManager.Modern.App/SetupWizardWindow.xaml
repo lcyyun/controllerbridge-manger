@@ -19,10 +19,7 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <StackPanel Spacing="12">
-                    <Border Width="44" Height="44" HorizontalAlignment="Left"
-                            CornerRadius="8" Background="{StaticResource BridgeAccentBrush}">
-                        <FontIcon Glyph="&#xE7FC;" FontSize="22" Foreground="White" />
-                    </Border>
+                    <Image Source="Assets/ControllerBridge.png" Width="44" Height="44" HorizontalAlignment="Left" AutomationProperties.Name="ControllerBridge" />
                     <TextBlock Text="Controller Bridge" FontSize="19" FontWeight="SemiBold" />
                     <TextBlock Text="设备设置向导" Opacity="0.66" />
                 </StackPanel>

@@ -116,8 +116,6 @@ internal static class LocalControllerInputConverter
         {
             Source = source,
             Buttons = isEdge ? decoded.Buttons : decoded.Buttons & ((1u << 19) - 1),
-            LeftY = UpAxis(body[1]),
-            RightY = UpAxis(body[3]),
             // Native IMU fields are X/Y/Z; the bridge decoder exposes Y/Z swapped.
             GyroY = simple ? 0 : BinaryPrimitives.ReadInt16LittleEndian(body[17..]),
             GyroZ = simple ? 0 : BinaryPrimitives.ReadInt16LittleEndian(body[19..]),
@@ -126,10 +124,6 @@ internal static class LocalControllerInputConverter
         };
         return true;
     }
-
-    private static int UpAxis(byte value) => value <= 128
-        ? ((128 - value) * 32767 + 64) / 128
-        : -((value - 128) * 32768 + 63) / 127;
 
     private static int? Battery(byte status)
     {

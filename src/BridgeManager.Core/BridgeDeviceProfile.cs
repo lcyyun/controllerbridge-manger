@@ -147,6 +147,20 @@ public static class BridgeDeviceProfiles
         Tags = ["bl616", "ds5", "dualsense"]
     };
 
+    // Unallocated development-preview ID; never presented as a production USB allocation.
+    // Require the adapter serial and vendor management usage, not just VID/PID.
+    public static readonly BridgeDeviceProfile Bl616XInputPreview = Bl616Xbox360 with
+    {
+        Key = "bl616-xinput-preview",
+        VendorId = 0xfffe,
+        ProductId = 0xcb16,
+        DisplayName = "BL616 XInput 开发预览（临时 USB ID）",
+        ManagerSerialNumber = "CB616XINPUT-TEST-0001",
+        LegacyManagerProductName = null,
+        SupportsInputReports = false,
+        Tags = ["bl616", "xinput", "development-preview"]
+    };
+
     public static readonly BridgeDeviceProfile Bl616DualSenseEdge = SonyDualSenseEdge with
     {
         Key = "bl616-dualsense-edge",
@@ -174,6 +188,7 @@ public static class BridgeDeviceProfiles
         PicoDualSense,
         NintendoNs2Pro,
         Bl616Xbox360,
+        Bl616XInputPreview,
         Bl616DualSense,
         Bl616DualSenseEdge,
         Bl616NintendoNs2Pro

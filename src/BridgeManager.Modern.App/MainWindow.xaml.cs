@@ -66,6 +66,7 @@ public sealed partial class MainWindow
             () => _moduleRegistry.GetHidDeviceProfiles());
         _module = _moduleRegistry.Fallback;
         InitializeComponent();
+        AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "ControllerBridge.ico"));
         MainNavigation.SizeChanged += MainNavigation_SizeChanged;
         foreach (var page in new[] { HomePage, InputPage, FeedbackPage, AdvancedPage, DynamicModulePage, FirmwarePage })
             PageScrolling.Attach(page);

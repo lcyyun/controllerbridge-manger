@@ -4,16 +4,24 @@
   "operations": {},
   "pages": [],
   "id": "bl616-unified",
-  "moduleVersion": "0.2.0-preview.1",
+  "moduleVersion": "0.2.1-preview.1",
   "displayName": "ControllerBridge BL616",
   "boardFamily": "Bouffalo Lab BL616",
   "description": "BL616 上统一接收 DualSense 与 Nintendo NS2Pro。",
   "priority": 110,
   "capabilities": "DeviceStatus, LiveInput, UsbRoleSelection, WirelessControllers, Rumble, UsbAudio, Motion, Settings, SelfTest, RawCommands, FirmwareFlashing",
   "matchAny": [
-    { "profileKeys": ["bl616-xbox360", "bl616-dualsense", "bl616-dualsense-edge", "bl616-ns2pro-nintendo"] }
+    { "profileKeys": ["bl616-xbox360", "bl616-xinput-preview", "bl616-dualsense", "bl616-dualsense-edge", "bl616-ns2pro-nintendo"] }
   ],
   "hidDevices": [
+    {
+      "key": "bl616-xinput-preview", "displayName": "BL616 XInput 开发预览（临时 USB ID）",
+      "vendorId": 65534, "productId": 51990,
+      "managerUsagePage": 65280, "managerUsageId": 1,
+      "managerFeatureReportId": 127, "usbRole": "Xbox",
+      "managerSerialNumber": "CB616XINPUT-TEST-0001",
+      "tags": ["bl616", "xinput", "development-preview"], "supportsInputReports": false
+    },
     {
       "key": "bl616-xbox360", "displayName": "BL616 Xbox 360 Manager",
       "vendorId": 1118, "productId": 654,
@@ -56,15 +64,15 @@
   "firmware": [
     {
       "id": "bl616-unified-current", "displayName": "ControllerBridge BL616",
-      "version": "0.2.0-dev",
-      "description": "DS5 Classic、NS2Pro BLE、震动、扳机与 USB Audio。",
+      "version": "0.2.1-preview.1",
+      "description": "开发预览：Xbox 身份使用未分配的临时 FFFE:CB16；支持签名 USB OTA。非正式 USB ID。",
       "boardIds": ["bl616-devkit"], "flashMethod": "BouffaloUart",
       "artifactRelativePath": "artifacts/blflash.json",
       "flashHint": "先让 BL616 进入 UART 下载模式，再选择其下载串口，以 2,000,000 baud 校验写入。"
     }
   ],
   "usbRoles": [
-    { "role": "Xbox", "displayName": "Xbox 360", "description": "XInput 身份", "command": "role set xbox" },
+    { "role": "Xbox", "displayName": "XInput", "description": "原生 XUSB；预览固件使用临时 USB ID", "command": "role set xbox" },
     { "role": "DualSense", "displayName": "DualSense", "description": "音频、震动与触觉", "command": "role set ds5" },
     { "role": "DualSenseEdge", "displayName": "DualSense Edge", "description": "Edge 身份", "command": "role set dse" },
     { "role": "NintendoNs2Pro", "displayName": "Nintendo NS2Pro", "description": "原生 Nintendo 身份", "command": "role set ns2pro" }
