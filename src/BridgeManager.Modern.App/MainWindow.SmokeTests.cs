@@ -1,5 +1,7 @@
 using BridgeManager.Core;
 using BridgeManager.Core.FirmwareModules;
+using BridgeManager.Core.Protocol;
+using BridgeManager.Core.Transports;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Graphics;
@@ -182,8 +184,9 @@ public sealed partial class MainWindow
             ReferenceEquals(wireless, WirelessControllerList.ItemsSource),
             "Unchanged status rebuilt option controls.");
         _localInputActive = false;
+        TestFirmwareUpdateControls();
         await File.WriteAllTextAsync(Path.Combine(output, "shell-result.txt"),
-            "PASS offline input navigation, local input without receiver, source isolation, wide/narrow/light/dark page rendering");
+            "PASS offline input navigation, local input without receiver, source isolation, wide/narrow/light/dark page rendering, OTA button busy/install/error/disconnect recovery");
         var wizard = new SetupWizardWindow(_moduleRegistry, () => new(),
             _ => throw new InvalidOperationException("No writes in wizard smoke."),
             _ => throw new InvalidOperationException("No installs in wizard smoke."),
@@ -191,5 +194,71 @@ public sealed partial class MainWindow
         wizard.Activate();
         try { await wizard.RunWizardSmokeAsync(output); }
         finally { wizard.Close(); }
+    }
+
+    private void TestFirmwareUpdateControls()
+    {
+        var previousModule = _module;
+        var previousDescriptor = _lastDescriptor;
+        SmokeCapture.Require(_client is null, "Firmware smoke must use only an offline client.");
+        try
+        {
+            _module = _moduleRegistry.Find("bl616-unified")!;
+            var transport = new FirmwareControlsSmokeTransport();
+            _client = new ManagerCommandClient(transport);
+            _lastDescriptor = transport.Descriptor;
+            RefreshFirmwareTargets();
+            SmokeCapture.Require(FirmwareUsbOtaButton.IsEnabled,
+                "Signed bundled BL616 OTA was not available to the connected fixture.");
+            for (var iteration = 0; iteration < 2; iteration++)
+            {
+                SetFirmwareUpdateBusy(true);
+                try
+                {
+                    RefreshFirmwareTargets(); // selection is rebuilt during installation
+                    SmokeCapture.Require(!FirmwareUsbOtaButton.IsEnabled &&
+                        !FirmwareCheckUpdatesButton.IsEnabled,
+                        "Firmware actions remained enabled during package work.");
+                    if (iteration == 1) throw new IOException("Simulated package download failure.");
+                }
+                catch (IOException) when (iteration == 1) { }
+                finally { SetFirmwareUpdateBusy(false); }
+                SmokeCapture.Require(FirmwareUsbOtaButton.IsEnabled &&
+                    FirmwareCheckUpdatesButton.IsEnabled &&
+                    !FirmwareUpdateProgress.IsActive,
+                    "OTA stayed disabled after package completion without reconnecting.");
+            }
+            SetFirmwareBusy(true);
+            SetFirmwareUpdateBusy(false);
+            SmokeCapture.Require(!FirmwareUsbOtaButton.IsEnabled &&
+                !FirmwareCheckUpdatesButton.IsEnabled,
+                "Package completion re-enabled actions during flashing.");
+            SetFirmwareBusy(false);
+            SetFirmwareUpdateBusy(true);
+            _client = null;
+            SetFirmwareUpdateBusy(false);
+            SmokeCapture.Require(!FirmwareUsbOtaButton.IsEnabled &&
+                !FirmwareCheckUpdatesButton.IsEnabled && !FirmwareInstallUpdateButton.IsEnabled,
+                "Disconnected receiver gained update actions after package completion.");
+        }
+        finally
+        {
+            _client = null;
+            _lastDescriptor = previousDescriptor;
+            _module = previousModule;
+            SetFirmwareUpdateBusy(false);
+            RefreshFirmwareTargets();
+        }
+    }
+
+    private sealed class FirmwareControlsSmokeTransport : IDeviceTransport
+    {
+        public DeviceDescriptor Descriptor { get; } = new("offline", "offline", 0x054c, 0x0ce6,
+            DeviceTransportKind.Hid, "bl616-dualsense", true, false, ManagerFeatureReportId: 0xf6);
+        public Task OpenAsync(CancellationToken token) => throw new InvalidOperationException("No USB in UI smoke.");
+        public Task WriteFeatureReportAsync(byte id, ReadOnlyMemory<byte> payload, CancellationToken token) => throw new InvalidOperationException("No USB in UI smoke.");
+        public Task WriteOutputReportAsync(byte id, ReadOnlyMemory<byte> payload, CancellationToken token) => throw new InvalidOperationException("No USB in UI smoke.");
+        public Task<byte[]> ReadFeatureReportAsync(byte id, CancellationToken token) => throw new InvalidOperationException("No USB in UI smoke.");
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

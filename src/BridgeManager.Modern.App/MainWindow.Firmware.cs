@@ -43,9 +43,7 @@ public sealed partial class MainWindow
         FirmwareBoardBox.SelectedItem = boards.FirstOrDefault(board =>
             board.Id.Equals(previousId, StringComparison.OrdinalIgnoreCase)) ??
             boards.FirstOrDefault();
-        FirmwareCheckUpdatesButton.IsEnabled = connectedModule is not null &&
-                                                !_firmwareUpdateBusy;
-        RefreshUsbOtaButton();
+        RefreshFirmwareUpdateControls();
         if (connectedModule is null)
         {
             FirmwareReleaseList.ItemsSource = null;
@@ -60,7 +58,7 @@ public sealed partial class MainWindow
 
     private async Task CheckFirmwareUpdatesAsync()
     {
-        if (_firmwareUpdateBusy) return;
+        if (_firmwareUpdateBusy || _firmwareFlashBusy) return;
         if (_client is null || _lastDescriptor is null ||
             _module.Id is not ("bl616-unified" or "sf32-unified"))
         {
@@ -72,11 +70,7 @@ public sealed partial class MainWindow
             return;
         }
         var connectedModuleId = _module.Id;
-        _firmwareUpdateBusy = true;
-        FirmwareCheckUpdatesButton.IsEnabled = false;
-        FirmwareInstallUpdateButton.IsEnabled = false;
-        FirmwareUpdateProgress.IsActive = true;
-        FirmwareUpdateProgress.Visibility = Visibility.Visible;
+        SetFirmwareUpdateBusy(true);
         FirmwareUpdateStatusText.Text = "正在读取 GitHub Releases...";
         try
         {
@@ -107,11 +101,7 @@ public sealed partial class MainWindow
         }
         finally
         {
-            _firmwareUpdateBusy = false;
-            FirmwareCheckUpdatesButton.IsEnabled = _client is not null &&
-                _module.Id is "bl616-unified" or "sf32-unified";
-            FirmwareUpdateProgress.IsActive = false;
-            FirmwareUpdateProgress.Visibility = Visibility.Collapsed;
+            SetFirmwareUpdateBusy(false);
         }
     }
 
@@ -121,13 +111,11 @@ public sealed partial class MainWindow
         asset.Name.EndsWith(".cbmodule", StringComparison.OrdinalIgnoreCase);
 
     private void FirmwareReleaseList_SelectionChanged(object sender,
-        SelectionChangedEventArgs e) =>
-        FirmwareInstallUpdateButton.IsEnabled = !_firmwareUpdateBusy &&
-            FirmwareReleaseList.SelectedItem is GithubModuleAsset;
+        SelectionChangedEventArgs e) => RefreshFirmwareUpdateControls();
 
     private async void FirmwareInstallUpdate_Click(object sender, RoutedEventArgs e)
     {
-        if (_firmwareUpdateBusy ||
+        if (_firmwareUpdateBusy || _firmwareFlashBusy ||
             FirmwareReleaseList.SelectedItem is not GithubModuleAsset asset) return;
         var moduleId = _module.Id;
         if (_client is null || !AssetMatchesModule(asset, moduleId))
@@ -135,11 +123,7 @@ public sealed partial class MainWindow
             RefreshFirmwareTargets();
             return;
         }
-        _firmwareUpdateBusy = true;
-        FirmwareCheckUpdatesButton.IsEnabled = false;
-        FirmwareInstallUpdateButton.IsEnabled = false;
-        FirmwareUpdateProgress.IsActive = true;
-        FirmwareUpdateProgress.Visibility = Visibility.Visible;
+        SetFirmwareUpdateBusy(true);
         string? packagePath = null;
         try
         {
@@ -176,15 +160,42 @@ public sealed partial class MainWindow
         }
         finally
         {
-            if (packagePath is not null && File.Exists(packagePath))
-                File.Delete(packagePath);
-            _firmwareUpdateBusy = false;
-            FirmwareCheckUpdatesButton.IsEnabled = _client is not null;
-            FirmwareInstallUpdateButton.IsEnabled =
-                _client is not null && FirmwareReleaseList.SelectedItem is GithubModuleAsset;
-            FirmwareUpdateProgress.IsActive = false;
-            FirmwareUpdateProgress.Visibility = Visibility.Collapsed;
+            try
+            {
+                if (packagePath is not null && File.Exists(packagePath))
+                    File.Delete(packagePath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                System.Diagnostics.Debug.WriteLine($"Firmware package cleanup: {ex.Message}");
+            }
+            finally { SetFirmwareUpdateBusy(false); }
         }
+    }
+
+    private void SetFirmwareUpdateBusy(bool busy)
+    {
+        _firmwareUpdateBusy = busy;
+        if (busy) FirmwareFlashButton.IsEnabled = false;
+        FirmwareUpdateProgress.IsActive = busy;
+        FirmwareUpdateProgress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+        RefreshFirmwareUpdateControls();
+    }
+
+    private void RefreshFirmwareUpdateControls()
+    {
+        var available = !_firmwareUpdateBusy && !_firmwareFlashBusy &&
+            _client is not null && _lastDescriptor is not null &&
+            _module.Id is "bl616-unified" or "sf32-unified";
+        FirmwareCheckUpdatesButton.IsEnabled = available;
+        FirmwareInstallUpdateButton.IsEnabled = available &&
+            FirmwareReleaseList.SelectedItem is GithubModuleAsset asset &&
+            AssetMatchesModule(asset, _module.Id);
+        FirmwarePreflightButton.IsEnabled = !_firmwareUpdateBusy && !_firmwareFlashBusy &&
+            _firmwareSelection?.Artifact.Available == true;
+        // Module installation refreshes the selection while still busy. Always
+        // recompute after leaving that state, including failed/cancelled updates.
+        RefreshUsbOtaButton();
     }
 
     private void FirmwareBoardBox_SelectionChanged(object sender,
@@ -376,7 +387,7 @@ public sealed partial class MainWindow
 
     private void FirmwarePreflight_Click(object sender, RoutedEventArgs e)
     {
-        if (_firmwareSelection is null) return;
+        if (_firmwareFlashBusy || _firmwareUpdateBusy || _firmwareSelection is null) return;
         var check = _firmwareFlashService.Check(_firmwareSelection.Module,
             _firmwareSelection.Firmware,
             (FirmwarePortBox.SelectedItem as FirmwarePortItem)?.PortName);
@@ -387,7 +398,7 @@ public sealed partial class MainWindow
 
     private async void FirmwareFlash_Click(object sender, RoutedEventArgs e)
     {
-        if (_firmwareFlashBusy || _firmwareSelection is null) return;
+        if (_firmwareFlashBusy || _firmwareUpdateBusy || _firmwareSelection is null) return;
         var selection = _firmwareSelection;
         var port = (FirmwarePortBox.SelectedItem as FirmwarePortItem)?.PortName;
         var check = _firmwareFlashService.Check(_firmwareSelection.Module,
@@ -440,7 +451,7 @@ public sealed partial class MainWindow
                      FirmwareInstallUpdateButton, FirmwareUsbOtaButton })
             control.IsEnabled = !busy;
         FirmwareFlashButton.IsEnabled = false;
-        if (!busy) RefreshUsbOtaButton();
+        RefreshFirmwareUpdateControls();
         FirmwareFlashProgress.IsActive = busy;
         FirmwareFlashProgress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
     }

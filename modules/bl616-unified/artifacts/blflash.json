@@ -19,7 +19,7 @@
       "kind": "firmware",
       "path": "controllerbridge_bl616_bl616.bin",
       "address": "@partition",
-      "sha256": "601118ab2a3922507a0bff6fbe9f89e134f5409660f1f4f4b01c9561b9469466"
+      "sha256": "93cd84197badd8a8209316eaca0d873d5ac337df8dde61e3d2329885c9b5411e"
     }
   ]
 }

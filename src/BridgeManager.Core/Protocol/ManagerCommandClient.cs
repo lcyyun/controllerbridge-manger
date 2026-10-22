@@ -7,11 +7,18 @@ public sealed class ManagerCommandClient
 {
     private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(8);
     private readonly IDeviceTransport _transport;
+    private readonly Func<int, CancellationToken, Task> _otaRetryDelay;
     private readonly SemaphoreSlim _commandLock = new(1, 1);
 
-    public ManagerCommandClient(IDeviceTransport transport)
+    public ManagerCommandClient(IDeviceTransport transport) : this(transport, Task.Delay)
+    {
+    }
+
+    internal ManagerCommandClient(IDeviceTransport transport,
+        Func<int, CancellationToken, Task> otaRetryDelay)
     {
         _transport = transport;
+        _otaRetryDelay = otaRetryDelay;
     }
 
     public async Task<JsonDocument> SendCommandAsync(
@@ -70,11 +77,12 @@ public sealed class ManagerCommandClient
     }
 
     private async Task<string> ReadJsonReplyAsync(byte featureReportId,
-                                                   CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool otaReply = false)
     {
         var result = new byte[1024];
         var total = -1;
         var receivedCount = 0;
+        var notReadyCount = 0;
         bool[]? received = null;
 
         for (var attempt = 0; attempt < 64; attempt++)
@@ -89,7 +97,10 @@ public sealed class ManagerCommandClient
             catch (ManagerCommandException ex) when (
                 ex.Message.Equals("bad reply magic", StringComparison.Ordinal))
             {
-                await Task.Delay(20, cancellationToken).ConfigureAwait(false);
+                if (otaReply)
+                    await _otaRetryDelay(OtaBackoffMilliseconds(notReadyCount++), cancellationToken).ConfigureAwait(false);
+                else
+                    await Task.Delay(20, cancellationToken).ConfigureAwait(false);
                 continue;
             }
 
@@ -149,9 +160,11 @@ public sealed class ManagerCommandClient
                 await _transport.WriteFeatureReportAsync(reportId, packet, timeout.Token).ConfigureAwait(false);
                 for (var attempt = 0; attempt < 30; attempt++)
                 {
-                    await Task.Delay(10, timeout.Token).ConfigureAwait(false);
+                    // Most ACKs are ready when SET_REPORT completes. Read first;
+                    // only yield if the firmware has not published this ACK yet.
+                    // A fixed per-packet delay adds minutes to a 46-byte stream.
                     string json;
-                    try { json = await ReadJsonReplyAsync(reportId, timeout.Token).ConfigureAwait(false); }
+                    try { json = await ReadJsonReplyAsync(reportId, timeout.Token, otaReply: true).ConfigureAwait(false); }
                     catch (ManagerCommandException) { break; }
                     var reply = JsonDocument.Parse(json);
                     if (reply.RootElement.TryGetProperty("ota", out var ota) && ota.ValueKind == JsonValueKind.True &&
@@ -160,6 +173,7 @@ public sealed class ManagerCommandClient
                         reply.RootElement.TryGetProperty("offset", out var ackOffset) && ackOffset.GetUInt32() == offset)
                         return reply;
                     reply.Dispose();
+                    await _otaRetryDelay(OtaBackoffMilliseconds(attempt), timeout.Token).ConfigureAwait(false);
                 }
             }
             throw new TimeoutException("BL616 OTA acknowledgement was not received.");
@@ -170,4 +184,9 @@ public sealed class ManagerCommandClient
         }
         finally { _commandLock.Release(); }
     }
+
+    // Yield briefly for a normal firmware scheduling slice, but retain the
+    // previous polling budget for slow flash erase/hash/signature operations.
+    private static int OtaBackoffMilliseconds(int attempt) =>
+        Math.Min(20, 2 << Math.Min(attempt, 4));
 }
