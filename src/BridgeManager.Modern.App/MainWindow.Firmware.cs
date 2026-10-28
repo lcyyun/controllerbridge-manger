@@ -18,6 +18,7 @@ public sealed partial class MainWindow
     private WizardFirmwareChoice? _firmwareSelection;
     private bool _firmwareUpdateBusy;
     private bool _firmwareFlashBusy;
+    private string? _firmwareStatusModuleId;
 
     private void InitializeFirmwarePage()
     {
@@ -44,12 +45,20 @@ public sealed partial class MainWindow
             board.Id.Equals(previousId, StringComparison.OrdinalIgnoreCase)) ??
             boards.FirstOrDefault();
         RefreshFirmwareUpdateControls();
+        if (connectedModule is not null && _firmwareStatusModuleId != connectedModule.Id)
+        {
+            _firmwareStatusModuleId = connectedModule.Id;
+            FirmwareReleaseList.ItemsSource = null;
+            FirmwareUpdateStatusText.Text = $"已连接 {connectedModule.DisplayName}。检查更新以获取发行固件，或使用已安装镜像。";
+            FirmwareRomExpander.IsExpanded = connectedModule.Id == "sf32-unified";
+        }
         if (connectedModule is null)
         {
+            _firmwareStatusModuleId = null;
             FirmwareReleaseList.ItemsSource = null;
             FirmwareInstallUpdateButton.IsEnabled = false;
             FirmwareUpdateStatusText.Text =
-                "请先在概览页连接 BL616 或 SF32 接收器；这里只显示当前设备的固件。";
+                "请先连接 BL616 或 SF32 接收器；这里只显示当前设备的固件。";
         }
     }
 
@@ -252,6 +261,8 @@ public sealed partial class MainWindow
     private void RefreshUsbOtaButton()
     {
         if (FirmwareUsbOtaButton is null) return;
+        FirmwareUsbOtaButton.Visibility = _client is not null && _module.Id != "bl616-unified"
+            ? Visibility.Collapsed : Visibility.Visible;
         FirmwareUsbOtaButton.IsEnabled = !_firmwareFlashBusy && !_firmwareUpdateBusy &&
             _client is not null && _module.Id == "bl616-unified" &&
             _firmwareSelection is not null &&
@@ -445,6 +456,7 @@ public sealed partial class MainWindow
     private void SetFirmwareBusy(bool busy)
     {
         _firmwareFlashBusy = busy;
+        UpdateNavigationBusy();
         foreach (var control in new Control[] { FirmwareBoardBox,
                      FirmwareImageBox, FirmwarePortBox, FirmwareRefreshPortsButton,
                      FirmwarePreflightButton, FirmwareCheckUpdatesButton,
@@ -457,10 +469,5 @@ public sealed partial class MainWindow
     }
 
     private void ShowFirmwareInfo(string message, bool error)
-    {
-        FirmwarePageInfoBar.Message = message;
-        FirmwarePageInfoBar.Severity = error ? InfoBarSeverity.Error :
-            InfoBarSeverity.Success;
-        FirmwarePageInfoBar.IsOpen = true;
-    }
+        => ShowStatus(message, error);
 }

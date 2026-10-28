@@ -2,12 +2,13 @@
 
 Windows desktop manager for ControllerBridge receivers.
 
-- Separate setup wizard for board selection, firmware, flashing and settings.
+- Inline Create Receiver flow for board selection, firmware, flashing and settings.
 - Receiver connection, input source selection, rumble and diagnostics.
 - Separate PlayStation and Nintendo button-mapping editors.
 - Live input from USB reports, never from serial/status snapshots.
 - Independent Windows Gamepad and native DualSense input testing.
-- Light/dark interface and simplified controller illustrations.
+- Responsive light/dark interface with live controller button, stick and trigger visualization.
+- Single interactive Manager instance and exclusive management-command ownership.
 
 The maintained receiver targets are BL616, ESP32-S3, SF32LB52 and Pico 2 W.
 Available controls depend on the connected firmware. BL616 is identified
@@ -24,9 +25,16 @@ update source is GitHub Releases; downloaded module packages are validated befor
 installation. The page only offers Manager-integrated BL616 and SF32 targets.
 Only packages matching the currently connected receiver are listed. Installation
 also verifies the manifest ID and rejects disconnects/device changes.
-The setup wizard opens above its Manager owner by default; its welcome page has
-a persistent option to disable automatic startup display. It remains available
-from the navigation menu.
+Create Receiver opens inside the main window; its welcome page has a persistent
+option to disable automatic startup display. It remains available at the bottom
+of the navigation menu. Board detection is optional and never starts flashing
+automatically. Status/error notifications and update availability appear below
+the main content.
+
+Before moving from older previews to 0.3.5-preview.9, close every older Manager
+window. Older binaries do not participate in the new ownership guards. Firmware
+has one management reply buffer, so competing command clients can cause incomplete
+replies and reconnects. USB input-only observers remain permitted.
 
 Native NS2Pro initialization and direct-PC rumble are not implemented by the
 independent input tester. Receiver-based input and rumble use their existing

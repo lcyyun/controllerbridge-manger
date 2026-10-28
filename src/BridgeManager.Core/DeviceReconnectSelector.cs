@@ -5,9 +5,10 @@ public static class DeviceReconnectSelector
     public static DeviceDescriptor? Select(
         IEnumerable<DeviceDescriptor> devices,
         DeviceDescriptor previous,
-        BridgeUsbRole expectedRole = BridgeUsbRole.Unknown)
+        BridgeUsbRole expectedRole = BridgeUsbRole.Unknown,
+        Func<DeviceDescriptor, bool>? matchesReceiver = null)
     {
-        var available = devices.ToArray();
+        var available = devices.Where(device => matchesReceiver?.Invoke(device) != false).ToArray();
         if (previous.TransportKind == DeviceTransportKind.Serial)
         {
             return available.FirstOrDefault(device =>
@@ -17,9 +18,12 @@ public static class DeviceReconnectSelector
 
         if (expectedRole != BridgeUsbRole.Unknown)
         {
-            return available.FirstOrDefault(device =>
+            var candidates = available.Where(device =>
                 device.TransportKind == DeviceTransportKind.Hid &&
-                device.UsbRole == expectedRole);
+                device.UsbRole == expectedRole).ToArray();
+            return candidates.FirstOrDefault(device =>
+                       device.Id.Equals(previous.Id, StringComparison.OrdinalIgnoreCase))
+                ?? (candidates.Length == 1 ? candidates[0] : null);
         }
 
         return available.FirstOrDefault(device =>

@@ -47,9 +47,28 @@ public sealed class BridgeFirmwareModuleRegistry
     public IReadOnlyList<BridgeModuleLoadIssue> LoadIssues { get; }
     public IBridgeFirmwareModule Fallback { get; }
 
-    public IBridgeFirmwareModule Resolve(DeviceDescriptor descriptor) =>
-        _modules.FirstOrDefault(module => module.Id != Fallback.Id &&
-                                         module.Matches(descriptor)) ?? Fallback;
+    public IBridgeFirmwareModule Resolve(DeviceDescriptor descriptor)
+    {
+        descriptor = NormalizeDescriptor(descriptor);
+        return _modules.FirstOrDefault(module => module.Id != Fallback.Id &&
+            module.Matches(descriptor)) ?? Fallback;
+    }
+
+    public DeviceDescriptor NormalizeDescriptor(DeviceDescriptor descriptor)
+    {
+        if (descriptor.TransportKind != DeviceTransportKind.Hid) return descriptor;
+        var verified = GetHidDeviceProfiles().FirstOrDefault(profile =>
+            (profile.ManagerSerialNumber is not null || profile.LegacyManagerProductName is not null) &&
+            profile.Matches(descriptor.VendorId, descriptor.ProductId) &&
+            profile.ManagerFeatureReportId == descriptor.ManagerFeatureReportId &&
+            profile.MatchesManagerIdentity(descriptor.SerialNumber, descriptor.ProductName));
+        return verified is null ? descriptor : descriptor with
+        {
+            ProfileKey = verified.Key, Platform = verified.DisplayName,
+            UsbRole = verified.UsbRole, ManagerFeatureReportId = verified.ManagerFeatureReportId,
+            CommandOutputReportId = verified.CommandOutputReportId
+        };
+    }
 
     public IBridgeFirmwareModule? Find(string id) =>
         _modules.FirstOrDefault(module =>

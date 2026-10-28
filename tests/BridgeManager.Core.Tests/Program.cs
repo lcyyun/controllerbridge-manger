@@ -5,6 +5,19 @@ using BridgeManager.Core.FirmwareModules;
 using BridgeManager.Core.Protocol;
 using BridgeManager.Core.Transports;
 
+// Isolated ownership helper. Never constructs a USB/serial transport.
+if (args.Length == 2 && args[0] == "--lease-hold")
+{
+    if (!ManagerResourceLease.TryAcquire(args[1], out var held)) { Environment.ExitCode = 2; return; }
+    using (held)
+    {
+        Console.WriteLine("LEASE_READY");
+        Console.Out.Flush();
+        await Task.Delay(30000);
+    }
+    return;
+}
+
 // Fake BLFlash child process for end-to-end launcher regression only.
 // Never opens a serial port or invokes any vendor flashing executable.
 if (args.Contains("--interface=uart"))
@@ -234,6 +247,8 @@ var tests = new (string Name, Action Run)[]
     ("gates experimental XInput discovery on explicit ID and exact serial", TestsBl616XInputExperiment),
     ("validates manager update channels, versions and origin", ManagerUpdateSelection),
     ("validates BL616 OTA frames, signatures and replay rejection", Bl616OtaTests.Run),
+    ("excludes competing processes and recovers ownership after crash", TestsManagerResourceOwnership),
+    ("rejects overwritten manager reply instead of mixing transactions", RejectsOverwrittenManagerReply),
     ("builds Windows feature command payload", BuildsWindowsFeatureCommandPayload),
     ("builds output command payload", BuildsOutputCommandPayload),
     ("parses reply with report id", ParsesReplyWithReportId),
@@ -245,6 +260,8 @@ var tests = new (string Name, Action Run)[]
     ("finds SF32LB52 Nintendo manager profile", FindsSf32lb52NintendoManagerProfile),
     ("resolves SF32 unified firmware module", ResolvesSf32UnifiedFirmwareModule),
     ("resolves every BL616 USB identity to BL616", ResolvesBl616FirmwareModule),
+    ("restores BL616 module from verified identity on generic descriptors", RestoresVerifiedBl616Identity),
+    ("keeps reconnects in the same receiver family and rejects ambiguity", KeepsReconnectReceiverFamily),
     ("loads the bundled BL616 module manifest", LoadsBundledBl616Manifest),
     ("distinguishes SF32 and Pico Nintendo identities", DistinguishesNintendoFirmwareModules),
     ("keeps unknown Nintendo identities board-neutral", KeepsUnknownNintendoIdentityNeutral),
@@ -1438,6 +1455,90 @@ static void SelectsRoleAfterUsbReenumeration()
     };
     var selected = DeviceReconnectSelector.Select(devices, previous, BridgeUsbRole.DualSenseEdge);
     AssertEqual("new-dse", selected?.Id ?? "");
+}
+
+static void TestsManagerResourceOwnership()
+{
+    var key = "lease-regression-" + Guid.NewGuid().ToString("N");
+    var start = new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!)
+    {
+        UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true,
+        RedirectStandardError = true
+    };
+    start.ArgumentList.Add("--lease-hold");
+    start.ArgumentList.Add(key);
+    using var child = System.Diagnostics.Process.Start(start)!;
+    try
+    {
+        AssertEqual("LEASE_READY", child.StandardOutput.ReadLineAsync()
+            .WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult());
+        AssertEqual(false, ManagerResourceLease.TryAcquire(key.ToUpperInvariant(), out var blocked));
+        AssertEqual<ManagerResourceLease?>(null, blocked);
+        // Only this isolated test's own child process is terminated.
+        child.Kill();
+        child.WaitForExit(5000);
+        AssertEqual(true, ManagerResourceLease.TryAcquire(key, out var recovered));
+        recovered!.Dispose();
+        AssertEqual(true, ManagerResourceLease.TryAcquire(key, out var reopened));
+        reopened!.Dispose();
+    }
+    finally { if (!child.HasExited) { child.Kill(); child.WaitForExit(5000); } }
+}
+
+static void RejectsOverwrittenManagerReply()
+{
+    var first = BuildReply("{\"reply\":1}", true);
+    first[7] = 40; // First transaction advertises a larger, incomplete reply.
+    var second = BuildReply("{\"ok\":true}", true);
+    first[0] = second[0] = ManagerProtocol.DualSenseFeatureReportId;
+    var transport = new ScriptedFeatureTransport(first, second);
+    try
+    {
+        using var reply = new ManagerCommandClient(transport).SendCommandAsync("status")
+            .GetAwaiter().GetResult();
+        throw new InvalidOperationException("Mixed two different manager transactions.");
+    }
+    catch (ManagerCommandException error) when (error.Message.Contains("reply length changed")) { }
+    finally { transport.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
+}
+
+static void RestoresVerifiedBl616Identity()
+{
+    var registry = new BridgeFirmwareModuleRegistry();
+    foreach (var profile in registry.GetHidDeviceProfiles().Where(profile => profile.Key.StartsWith("bl616-")))
+    {
+        var descriptor = new DeviceDescriptor("hid-" + profile.Key, "generic", profile.VendorId,
+            profile.ProductId, DeviceTransportKind.Hid, "generic", true, true,
+            ProfileKey: "unclassified", SerialNumber: profile.ManagerSerialNumber,
+            ManagerFeatureReportId: profile.ManagerFeatureReportId);
+        var normalized = registry.NormalizeDescriptor(descriptor);
+        AssertEqual(profile.Key, normalized.ProfileKey);
+        AssertEqual(profile.ManagerFeatureReportId, normalized.ManagerFeatureReportId);
+        AssertEqual(profile.CommandOutputReportId, normalized.CommandOutputReportId);
+        AssertEqual("bl616-unified", registry.Resolve(descriptor).Id);
+    }
+    var unknown = new DeviceDescriptor("unknown", "unknown", 0x057e, 0x2069,
+        DeviceTransportKind.Hid, "generic", true, true, ProfileKey: "ns2pro-nintendo",
+        SerialNumber: "UNRELATED");
+    AssertEqual("generic-manager", registry.Resolve(unknown).Id);
+    AssertEqual("ns2pro-nintendo", registry.NormalizeDescriptor(unknown).ProfileKey);
+}
+
+static void KeepsReconnectReceiverFamily()
+{
+    var registry = new BridgeFirmwareModuleRegistry();
+    var receiver = registry.Find("bl616-unified")!;
+    var previous = Hid("previous", 0x054c, 0x0ce6, BridgeUsbRole.DualSense) with
+        { ProfileKey = "bl616-dualsense", SerialNumber = "ControllerBridge BL616" };
+    var wrong = Hid("wrong", 0x057e, 0x2069, BridgeUsbRole.NintendoNs2Pro) with
+        { ProfileKey = "ns2pro-nintendo", SerialNumber = "UNRELATED" };
+    var right = wrong with { Id = "right", ProfileKey = "bl616-ns2pro-nintendo", SerialNumber = "CB616NS2-0002" };
+    AssertEqual("right", DeviceReconnectSelector.Select([wrong, right], previous,
+        BridgeUsbRole.NintendoNs2Pro, receiver.Matches)?.Id);
+    AssertEqual<DeviceDescriptor?>(null, DeviceReconnectSelector.Select([wrong], previous,
+        BridgeUsbRole.NintendoNs2Pro, receiver.Matches));
+    AssertEqual<DeviceDescriptor?>(null, DeviceReconnectSelector.Select([right, right with { Id = "other" }],
+        previous, BridgeUsbRole.NintendoNs2Pro, receiver.Matches));
 }
 
 static void DoesNotReconnectPreviousUsbRole()

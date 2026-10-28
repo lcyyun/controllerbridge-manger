@@ -18,33 +18,49 @@ public sealed class WindowsHidTransportFactory : IDeviceTransportFactory
     private IReadOnlyList<DeviceDescriptor> GetDevices(CancellationToken cancellationToken)
     {
         var descriptors = new List<DeviceDescriptor>();
-        foreach (var profile in OrderProfilesForDiscovery(Bl616XInputExperiment.Append(
-                     _profiles(), Environment.GetEnvironmentVariable(Bl616XInputExperiment.EnvironmentKey))))
+        var profiles = OrderProfilesForDiscovery(Bl616XInputExperiment.Append(
+            _profiles(), Environment.GetEnvironmentVariable(Bl616XInputExperiment.EnvironmentKey))).ToArray();
+        foreach (var identity in profiles.GroupBy(profile => (profile.VendorId, profile.ProductId)))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            foreach (var device in FindDevices(profile))
+            foreach (var device in DeviceList.Local.GetHidDevices(identity.Key.VendorId, identity.Key.ProductId))
             {
-                descriptors.Add(new DeviceDescriptor(
-                    device.DevicePath,
-                    GetDisplayName(device, profile),
-                    profile.VendorId,
-                    profile.ProductId,
-                    DeviceTransportKind.Hid,
-                    profile.DisplayName,
-                    SupportsFeatureReports: device.GetMaxFeatureReportLength() > 0,
-                    SupportsOutputReports: profile.CommandOutputReportId.HasValue &&
-                        device.GetMaxOutputReportLength() > 0,
-                    SupportsInputReports: profile.SupportsInputReports &&
-                        device.GetMaxInputReportLength() > 0,
-                    UsbRole: profile.UsbRole,
-                    ProfileKey: profile.Key,
-                    SerialNumber: GetSerialNumber(device),
-                    ProductName: GetProductName(device),
-                    ManagerFeatureReportId: profile.ManagerFeatureReportId,
-                    CommandOutputReportId: profile.CommandOutputReportId));
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    // One snapshot per HID collection. Previously the same collection
+                    // was re-read for every profile: a transient string failure could
+                    // discard the verified match and later admit a generic profile.
+                    var serial = GetSerialNumber(device);
+                    var product = GetProductName(device);
+                    var report = device.GetReportDescriptor();
+                    var profile = identity.FirstOrDefault(candidate =>
+                        candidate.MatchesManagerIdentity(serial, product) &&
+                        report.DeviceItems.Any(item => item.Usages.ContainsValue(
+                            ((uint)candidate.ManagerUsagePage << 16) | candidate.ManagerUsageId)) &&
+                        report.FeatureReports.Any(feature =>
+                            feature.ReportID == candidate.ManagerFeatureReportId &&
+                            feature.Length >= ManagerProtocol.FeatureReportLength));
+                    if (profile is null) continue;
+                    descriptors.Add(new DeviceDescriptor(
+                        device.DevicePath,
+                        string.IsNullOrWhiteSpace(product) ? profile.DisplayName : $"{profile.DisplayName} - {product}",
+                        profile.VendorId, profile.ProductId, DeviceTransportKind.Hid, profile.DisplayName,
+                        SupportsFeatureReports: device.GetMaxFeatureReportLength() > 0,
+                        SupportsOutputReports: profile.CommandOutputReportId.HasValue &&
+                            device.GetMaxOutputReportLength() > 0,
+                        SupportsInputReports: profile.SupportsInputReports &&
+                            device.GetMaxInputReportLength() > 0,
+                        UsbRole: profile.UsbRole, ProfileKey: profile.Key,
+                        SerialNumber: serial, ProductName: product,
+                        ManagerFeatureReportId: profile.ManagerFeatureReportId,
+                        CommandOutputReportId: profile.CommandOutputReportId));
+                }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                {
+                    // Removal during enumeration: retry with a fresh snapshot later.
+                }
             }
         }
-
         IReadOnlyList<DeviceDescriptor> result = descriptors
             .GroupBy(item => item.Id, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())
@@ -88,39 +104,6 @@ public sealed class WindowsHidTransportFactory : IDeviceTransportFactory
         return new WindowsHidTransport(descriptor, device, stream);
     }
 
-    private static IEnumerable<HidDevice> FindDevices(BridgeDeviceProfile profile)
-    {
-        foreach (var device in DeviceList.Local.GetHidDevices(
-                     profile.VendorId, profile.ProductId))
-        {
-            bool matches;
-            try
-            {
-                var usage = ((uint)profile.ManagerUsagePage << 16) |
-                            profile.ManagerUsageId;
-                var reportDescriptor = device.GetReportDescriptor();
-                matches = reportDescriptor.DeviceItems.Any(
-                              item => item.Usages.ContainsValue(usage)) &&
-                          reportDescriptor.FeatureReports.Any(report =>
-                              report.ReportID == profile.ManagerFeatureReportId &&
-                              report.Length >= ManagerProtocol.FeatureReportLength) &&
-                          profile.MatchesManagerIdentity(
-                              profile.ManagerSerialNumber is null
-                                  ? null : GetSerialNumber(device),
-                              profile.LegacyManagerProductName is null
-                                  ? null : GetProductName(device));
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                matches = false;
-            }
-
-            if (matches)
-            {
-                yield return device;
-            }
-        }
-    }
 
     private static string? GetSerialNumber(HidDevice device)
     {
@@ -146,19 +129,4 @@ public sealed class WindowsHidTransportFactory : IDeviceTransportFactory
         }
     }
 
-    private static string GetDisplayName(HidDevice device,
-                                         BridgeDeviceProfile profile)
-    {
-        try
-        {
-            var product = device.GetProductName();
-            return string.IsNullOrWhiteSpace(product)
-                ? profile.DisplayName
-                : $"{profile.DisplayName} - {product}";
-        }
-        catch (IOException)
-        {
-            return profile.DisplayName;
-        }
-    }
 }

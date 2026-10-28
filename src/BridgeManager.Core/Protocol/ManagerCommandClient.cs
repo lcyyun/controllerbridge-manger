@@ -100,10 +100,15 @@ public sealed class ManagerCommandClient
                 if (otaReply)
                     await _otaRetryDelay(OtaBackoffMilliseconds(notReadyCount++), cancellationToken).ConfigureAwait(false);
                 else
+                {
+                    notReadyCount++;
                     await Task.Delay(20, cancellationToken).ConfigureAwait(false);
+                }
                 continue;
             }
 
+            if (total >= 0 && total != chunk.TotalLength)
+                throw new ManagerCommandException("manager reply length changed; possible competing manager client");
             total = chunk.TotalLength;
             if (total < 0 || chunk.Offset < 0 || chunk.Offset + chunk.Payload.Length > total)
             {
@@ -139,7 +144,7 @@ public sealed class ManagerCommandClient
         }
 
         throw new ManagerCommandException(
-            "manager reply was not ready or remained incomplete");
+            $"manager reply was not ready or remained incomplete (received {receivedCount}/{total} bytes; not-ready reads {notReadyCount})");
     }
 
     public async Task<JsonDocument> SendBl616OtaPacketAsync(

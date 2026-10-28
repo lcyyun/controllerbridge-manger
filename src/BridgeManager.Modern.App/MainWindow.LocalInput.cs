@@ -23,6 +23,7 @@ public sealed partial class MainWindow
     private DateTimeOffset? _lastLocalInput;
     private string? _artworkProfile;
     private bool _artworkInitialized;
+    private ControllerInputDiagram? _controllerInputDiagram;
     private bool _localInputActive;
     private string? _localReadError;
     private LocalControllerDevice? _selectedLocalDevice;
@@ -253,19 +254,26 @@ public sealed partial class MainWindow
             : source.Contains("DS5", StringComparison.OrdinalIgnoreCase) ||
               source.Contains("DualSense", StringComparison.OrdinalIgnoreCase) ? "ds5"
             : source.Contains("NS2", StringComparison.OrdinalIgnoreCase) ||
-              source.Contains("Nintendo", StringComparison.OrdinalIgnoreCase) ? "ns2pro" : null;
+              source.Contains("Nintendo", StringComparison.OrdinalIgnoreCase) ? "ns2pro"
+            : source.Contains("XInput", StringComparison.OrdinalIgnoreCase) ||
+              source.Contains("Xbox", StringComparison.OrdinalIgnoreCase) ? "xbox" : null;
+        if (profile == "ds5" && (source?.Contains("Edge", StringComparison.OrdinalIgnoreCase) == true ||
+            (_localInputActive ? _selectedLocalDevice?.DisplayName.Contains("Edge", StringComparison.OrdinalIgnoreCase) == true
+                : _lastDescriptor?.UsbRole == BridgeUsbRole.DualSenseEdge))) profile = "dse";
         if (_artworkInitialized && profile == _artworkProfile) return;
         _artworkInitialized = true;
         _artworkProfile = profile;
+        _controllerInputDiagram = null;
         InputControllerArtworkHost.Children.Clear();
         if (profile is not null)
         {
+            _controllerInputDiagram = new ControllerInputDiagram(profile);
             InputControllerArtworkHost.Children.Add(new Viewbox
             {
-                Child = ControllerArtwork.Create(profile),
+                Child = _controllerInputDiagram,
                 Stretch = Stretch.Uniform,
-                MaxWidth = 550,
-                MaxHeight = 330
+                MaxWidth = 740,
+                MaxHeight = 420
             });
         }
         else

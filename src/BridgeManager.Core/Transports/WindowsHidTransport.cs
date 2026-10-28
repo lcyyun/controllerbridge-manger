@@ -9,6 +9,8 @@ public sealed class WindowsHidTransport : IDeviceTransport, IInputReportSource
     private readonly CancellationTokenSource _readCancellation = new();
     private Task? _readTask;
     private bool _disposed;
+    private readonly object _leaseGate = new();
+    private ManagerResourceLease? _managerLease;
 
     public WindowsHidTransport(DeviceDescriptor descriptor,
                                HidDevice device,
@@ -42,6 +44,7 @@ public sealed class WindowsHidTransport : IDeviceTransport, IInputReportSource
     {
         cancellationToken.ThrowIfCancellationRequested();
         ObjectDisposedException.ThrowIf(_disposed, this);
+        EnsureManagerLease();
         var report = BuildReport(
             reportId, payload.Span, _device.GetMaxFeatureReportLength(),
             "feature");
@@ -58,6 +61,7 @@ public sealed class WindowsHidTransport : IDeviceTransport, IInputReportSource
                                              CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        EnsureManagerLease();
         var report = BuildReport(
             reportId, payload.Span, _device.GetMaxOutputReportLength(),
             "output");
@@ -70,6 +74,7 @@ public sealed class WindowsHidTransport : IDeviceTransport, IInputReportSource
     {
         cancellationToken.ThrowIfCancellationRequested();
         ObjectDisposedException.ThrowIf(_disposed, this);
+        EnsureManagerLease();
         var length = _device.GetMaxFeatureReportLength();
         if (length <= 0)
         {
@@ -90,21 +95,38 @@ public sealed class WindowsHidTransport : IDeviceTransport, IInputReportSource
     {
         if (_disposed) return;
         _disposed = true;
-        _readCancellation.Cancel();
-        _stream.Dispose();
-        if (_readTask is not null)
+        try
         {
-            try
+            _readCancellation.Cancel();
+            _stream.Dispose();
+            if (_readTask is not null)
             {
-                await _readTask.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+                try
+                {
+                    await _readTask.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is OperationCanceledException or
+                                           TimeoutException or IOException or
+                                           ObjectDisposedException)
+                {
+                }
             }
-            catch (Exception ex) when (ex is OperationCanceledException or
-                                       TimeoutException or IOException or
-                                       ObjectDisposedException)
-            {
-            }
+            _readCancellation.Dispose();
         }
-        _readCancellation.Dispose();
+        finally { lock (_leaseGate) { _managerLease?.Dispose(); _managerLease = null; } }
+    }
+
+    private void EnsureManagerLease()
+    {
+        // Read-only USB input observers don't consume the feature reply cursor
+        // and remain allowed. Only a management reader/writer owns this lease.
+        lock (_leaseGate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_managerLease is null &&
+                !ManagerResourceLease.TryAcquire("manager-hid:" + Descriptor.Id, out _managerLease))
+                throw new ManagerChannelBusyException();
+        }
     }
 
     private async Task ReadInputReportsAsync(CancellationToken cancellationToken)

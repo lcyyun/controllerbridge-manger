@@ -33,36 +33,50 @@ public sealed partial class MainWindow
                 !item.CanPair && !item.CanConnect && !item.CanDisconnect && !item.CanForget),
             "An unread wireless state was presented as unpaired or actionable.");
         var root = (FrameworkElement)Content;
+        SmokeCapture.Require(Grid.GetRow(ManagerUpdateBanner) == 2 &&
+            Grid.GetRow(StatusBar) == 3 && Grid.GetRow(PageContentHost) == 1,
+            "Update availability and runtime notifications must stay below page content.");
         foreach (var (width, height, suffix) in new[]
         {
             (1640, 940, "maximized"), (1360, 940, "wide"),
-            (860, 900, "narrow"), (620, 900, "compact")
+            (860, 900, "narrow"), (620, 900, "compact"), (500, 900, "small")
         })
         {
             AppWindow.Resize(new SizeInt32(width, height));
             await Task.Delay(250);
+            await SmokeCapture.SaveAsync(root, output, $"sidebar-{suffix}.png");
+            SmokeCapture.Require(MainNavigation.PaneHeader is null &&
+                MainNavigation.PaneFooter is null &&
+                MainNavigation.FooterMenuItems.Count == 2 &&
+                MainNavigation.FooterMenuItems.Contains(WizardNavItem) &&
+                MainNavigation.FooterMenuItems.Contains(UpdateNavItem),
+                "Sidebar branding was not removed or footer actions were lost.");
+            var contentWidth = Math.Min(1180, PageContentHost.ActualWidth - 12);
+            var singleColumn = contentWidth < 880;
+            var compact = contentWidth < 600;
+            var stackedUpdate = contentWidth < 760;
             SmokeCapture.Require(
-                width >= 980
+                !singleColumn
                     ? Grid.GetRow(InputDetailPanel) == 0 && Grid.GetColumn(InputDetailPanel) == 1
                     : Grid.GetRow(InputDetailPanel) == 1 && Grid.GetColumn(InputDetailPanel) == 0,
                 $"Input layout did not adapt at {width}px.");
             SmokeCapture.Require(
-                width >= 980
+                !singleColumn
                     ? Grid.GetRow(DeviceSettingsPanel) == 0 && Grid.GetColumn(DeviceSettingsPanel) == 1
                     : Grid.GetRow(DeviceSettingsPanel) == 1 && Grid.GetColumn(DeviceSettingsPanel) == 0,
                 $"Advanced layout did not adapt at {width}px.");
             SmokeCapture.Require(
-                width >= 980
-                    ? Grid.GetRow(FirmwareFlashPanel) == 0 && Grid.GetColumn(FirmwareFlashPanel) == 1
-                    : Grid.GetRow(FirmwareFlashPanel) == 1 && Grid.GetColumn(FirmwareFlashPanel) == 0,
+                !singleColumn
+                    ? Grid.GetRow(FirmwareFlashCard) == 0 && Grid.GetColumn(FirmwareFlashCard) == 1
+                    : Grid.GetRow(FirmwareFlashCard) == 1 && Grid.GetColumn(FirmwareFlashCard) == 0,
                 $"Firmware layout did not adapt at {width}px.");
             SmokeCapture.Require(
-                width >= 780
+                !compact
                     ? Grid.GetRow(HeaderActions) == 0
-                    : Grid.GetRow(HeaderActions) == 1 && Grid.GetRow(InputMetricPanel) == 1,
+                    : Grid.GetRow(HeaderActions) == 1 && Grid.GetRow(UsbMetricPanel) == 1,
                 $"Shell layout did not adapt at {width}px.");
             SmokeCapture.Require(ManagerUpdateBanner.Visibility == Visibility.Visible &&
-                (width >= 780
+                (!stackedUpdate
                     ? Grid.GetRow(ManagerUpdateActions) == 0 &&
                       Grid.GetColumn(ManagerUpdateActions) == 2
                     : Grid.GetRow(ManagerUpdateActions) == 1 &&
@@ -73,6 +87,9 @@ public sealed partial class MainWindow
                 $"Compact navigation disappeared at {width}px.");
             SmokeCapture.Require(width < 1640 || Math.Abs(HomePageContent.Width - 1180) < 0.5,
                 "Maximized page content did not retain its centered maximum width.");
+            SmokeCapture.Require(Grid.GetRow(WirelessSection) == (singleColumn ? 1 : 0) &&
+                Grid.GetColumn(WirelessSection) == (singleColumn ? 0 : 1),
+                "Dashboard did not adapt to the actual content width.");
             root.RequestedTheme = ElementTheme.Light;
             foreach (var (item, tag) in new[] {
                 (HomeNavItem, "home"), (InputNavItem, "input"),
@@ -98,6 +115,10 @@ public sealed partial class MainWindow
                     SmokeCapture.Require(ButtonsText.Text.Contains("Cross") &&
                         LeftTriggerBar.Value == 32768 && _status.InputValid != true,
                         "Local input was incorrectly gated on the receiver connection.");
+                    SmokeCapture.Require(_controllerInputDiagram?.IsHighlighted(0) == true &&
+                        Math.Abs(_controllerInputDiagram.LeftTriggerLevel - 0.5) < 0.001 &&
+                        _controllerInputDiagram.LeftStickOffset == new Windows.Foundation.Point(11, 5.5),
+                        "Live controller artwork did not follow the displayed input sample.");
                     var previous = InputHealthText.Text;
                     UpdateSummary(System.Text.Json.JsonSerializer.SerializeToElement(new
                     {
@@ -185,15 +206,208 @@ public sealed partial class MainWindow
             "Unchanged status rebuilt option controls.");
         _localInputActive = false;
         TestFirmwareUpdateControls();
+        TestReenumeratedModuleControls();
+        await TestLiveControllerDiagramAsync(root, output);
+        await CaptureConnectedDashboardAsync(root, output);
         await File.WriteAllTextAsync(Path.Combine(output, "shell-result.txt"),
-            "PASS offline input navigation, local input without receiver, source isolation, wide/narrow/light/dark page rendering, OTA button busy/install/error/disconnect recovery");
-        var wizard = new SetupWizardWindow(_moduleRegistry, () => new(),
-            _ => throw new InvalidOperationException("No writes in wizard smoke."),
-            _ => throw new InvalidOperationException("No installs in wizard smoke."),
-            () => { }, discoverDevices: false);
-        wizard.Activate();
-        try { await wizard.RunWizardSmokeAsync(output); }
-        finally { wizard.Close(); }
+            "PASS offline input navigation, local input without receiver, source isolation, wide/narrow/light/dark page rendering, OTA button busy/install/error/disconnect recovery, connected dashboard and shared device selection, footer actions without branding, live controller buttons/sticks/analog triggers/release/stale reset");
+        AppWindow.Resize(new SizeInt32(1360, 940));
+        root.RequestedTheme = ElementTheme.Light;
+        OpenCreateReceiver();
+        var wizard = _setupWizardView!;
+        SmokeCapture.Require(ReferenceEquals(CreateReceiverHost.Child, wizard) &&
+            ReferenceEquals(MainNavigation.SelectedItem, WizardNavItem) &&
+            CreateReceiverPage.Visibility == Visibility.Visible,
+            "Create receiver did not open in the right-hand page.");
+        await SmokeCapture.SaveAsync(root, output, "create-receiver-inline.png");
+        SmokeCapture.Require(ReferenceEquals(wizard.XamlRoot, MainNavigation.XamlRoot),
+            "Create receiver opened in a different window.");
+        SmokeCapture.Require(MainNavigation.FooterMenuItems.Contains(WizardNavItem) &&
+            !MainNavigation.MenuItems.Contains(WizardNavItem),
+            "Create receiver entry was not placed in the bottom-left navigation.");
+        await wizard.RunWizardSmokeAsync(output);
+        MainNavigation.SelectedItem = HomeNavItem;
+        MainNavigation.SelectedItem = WizardNavItem;
+        SmokeCapture.Require(ReferenceEquals(wizard, _setupWizardView),
+            "Navigation discarded the in-progress create-receiver page.");
+    }
+
+    private async Task TestLiveControllerDiagramAsync(FrameworkElement root, string output)
+    {
+        AppWindow.Resize(new SizeInt32(1360, 1000));
+        MainNavigation.SelectedItem = InputNavItem;
+        _localInputActive = true;
+        try
+        {
+            foreach (var (source, suffix, extraBits) in new[]
+            {
+                ("DS5 USB input (local)", "ds5", new[] { 17, 18 }),
+                ("NS2 USB input (local)", "ns2pro", new[] { 19, 20, 21, 24 }),
+                ("XInput (local)", "xbox", Array.Empty<int>()),
+                ("DualSense Edge (local)", "edge", new[] { 17, 18, 20, 21, 22, 23 })
+            })
+            {
+                var neutral = new ControllerInputSnapshot(source, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 8192, 0, 0, 0, true, 80);
+                UpdateInputDisplay(neutral, local: true);
+                var diagram = _controllerInputDiagram!;
+                foreach (var bit in Enumerable.Range(0, 17).Concat(extraBits))
+                {
+                    UpdateInputDisplay(neutral with { Buttons = 1u << bit }, local: true);
+                    SmokeCapture.Require(ReferenceEquals(diagram, _controllerInputDiagram) &&
+                        diagram.IsHighlighted(bit), $"{suffix} button {bit} did not highlight.");
+                    UpdateInputDisplay(neutral, local: true);
+                    SmokeCapture.Require(!diagram.IsHighlighted(bit), $"{suffix} button {bit} remained highlighted after release.");
+                }
+                var pressed = neutral with
+                {
+                    Buttons = (1u << 0) | (1u << 4) | (1u << 7) | (1u << 8) | (1u << 14) | (1u << 16),
+                    LeftX = -16384, LeftY = 16384, RightX = 8192, RightY = -16384,
+                    LeftTrigger = 49151, RightTrigger = 16384
+                };
+                UpdateInputDisplay(pressed, local: true);
+                SmokeCapture.Require(diagram.LeftStickOffset == new Windows.Foundation.Point(-11, -11) &&
+                    diagram.RightStickOffset == new Windows.Foundation.Point(5.5, 11) &&
+                    Math.Abs(diagram.LeftTriggerLevel - 0.75) < 0.001 &&
+                    Math.Abs(diagram.RightTriggerLevel - 0.25) < 0.001 &&
+                    diagram.IsHighlighted(10) && diagram.IsHighlighted(11) && !diagram.IsHighlighted(9),
+                    $"{suffix} analog motion, trigger depth or simultaneous buttons were incorrect.");
+                foreach (var theme in new[] { ElementTheme.Light, ElementTheme.Dark })
+                {
+                    root.RequestedTheme = theme;
+                    InputPage.ChangeView(0, 0, null, true);
+                    await SmokeCapture.SaveAsync(root, output, $"live-input-{suffix}-{theme}.png");
+                }
+                ClearInputTest("离线测试：停止输入");
+                SmokeCapture.Require(diagram.PressedButtons == 0 && !diagram.IsHighlighted(0) &&
+                    !diagram.IsHighlighted(10) && diagram.LeftStickOffset == new Windows.Foundation.Point(),
+                    $"{suffix} disconnected state retained live highlights.");
+                UpdateInputDisplay(pressed, local: true);
+                _localInputActive = false;
+                _status = new BridgeStatusSnapshot { InputValid = false, InputStale = true };
+                UpdateInputDisplay(pressed);
+                SmokeCapture.Require(diagram.PressedButtons == 0 && diagram.RightTriggerLevel == 0,
+                    $"{suffix} stale receiver input retained live highlights.");
+                _localInputActive = true;
+            }
+        }
+        finally
+        {
+            _localInputActive = false;
+            _status = new BridgeStatusSnapshot();
+            ClearInputTest("离线图形验证结束");
+        }
+    }
+
+    private void TestReenumeratedModuleControls()
+    {
+        var previousModule = _module;
+        try
+        {
+            foreach (var profile in _moduleRegistry.GetHidDeviceProfiles()
+                .Where(profile => profile.Key.StartsWith("bl616-")))
+            {
+                ActivateModule(_moduleRegistry.Fallback);
+                var descriptor = new DeviceDescriptor("offline", "unclassified", profile.VendorId,
+                    profile.ProductId, DeviceTransportKind.Hid, "generic", true, true,
+                    ProfileKey: "ns2pro-nintendo", SerialNumber: profile.ManagerSerialNumber,
+                    ManagerFeatureReportId: profile.ManagerFeatureReportId);
+                ActivateModule(_moduleRegistry.Resolve(descriptor));
+                SmokeCapture.Require(_module.Id == "bl616-unified" &&
+                    RoleAndWirelessSection.Visibility == Visibility.Visible &&
+                    UsbRoleSection.Visibility == Visibility.Visible && WirelessSection.Visibility == Visibility.Visible &&
+                    RoleOptionsList.Items.Count == _module.UsbRoles.Count &&
+                    WirelessControllerList.Items.Count == _module.WirelessControllers.Count,
+                    "Verified BL616 re-enumeration lost USB roles or wireless controller controls.");
+            }
+        }
+        finally { ActivateModule(previousModule); }
+    }
+
+    private async Task CaptureConnectedDashboardAsync(FrameworkElement root, string output)
+    {
+        var previousModule = _module;
+        try
+        {
+            ActivateModule(_moduleRegistry.Find("bl616-unified")!);
+            var transport = new FirmwareControlsSmokeTransport();
+            _client = new ManagerCommandClient(transport);
+            _lastDescriptor = transport.Descriptor;
+            DeviceList.ItemsSource = new[] { transport.Descriptor };
+            DeviceList.SelectedItem = transport.Descriptor;
+            await Task.Delay(60);
+            SmokeCapture.Require(Equals(HomeDeviceBox.SelectedItem, DeviceList.SelectedItem),
+                "Dashboard device selection did not follow the shared device selector.");
+            HomeDeviceBox.SelectedItem = null;
+            await Task.Delay(60);
+            SmokeCapture.Require(DeviceList.SelectedItem is null,
+                "Dashboard selection did not update the shared device selector.");
+            HomeDeviceBox.SelectedItem = transport.Descriptor;
+            SetConnectionAppearance(true, "设备已连接");
+            ConnectionText.Text = "BL616 已连接";
+            TransportText.Text = "USB HID · DualSense / DS5";
+            _status = new BridgeStatusSnapshot();
+            UpdateSummary(System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                role = "ds5", active_input = "ns2pro", input_valid = true,
+                usb_mounted = true, report_rate_hz = 250, ds5_saved = true,
+                ds5_connected = false, ds5_pairing = false, ns2_saved = true,
+                ns2_connected = true, ns2_scanning = false
+            }));
+            RefreshFirmwareTargets();
+            SmokeCapture.Require(HomeConnectionOptions.Visibility == Visibility.Collapsed &&
+                !HomeConnectionOptions.IsExpanded &&
+                InputPreferenceText.Visibility == Visibility.Collapsed &&
+                !FirmwareRomExpander.IsExpanded && FirmwareUsbOtaButton.IsEnabled,
+                "Connected dashboard did not simplify its connection or update actions.");
+            ShowReceiverSelector_Click(new Button(), new RoutedEventArgs());
+            SmokeCapture.Require(HomeConnectionOptions.Visibility == Visibility.Visible &&
+                HomeConnectionOptions.IsExpanded, "Connected device selector could not be reopened.");
+            SetConnectionAppearance(true, "设备已连接");
+            ManagerUpdateBanner.Visibility = Visibility.Collapsed;
+            StatusBar.IsOpen = false;
+            foreach (var (width, height, suffix) in new[]
+            {
+                (1360, 940, "wide"), (860, 900, "narrow"), (500, 900, "small")
+            })
+            {
+                AppWindow.Resize(new SizeInt32(width, height));
+                await Task.Delay(150);
+                foreach (var theme in new[] { ElementTheme.Light, ElementTheme.Dark })
+                {
+                    root.RequestedTheme = theme;
+                    MainNavigation.SelectedItem = HomeNavItem;
+                    HomePage.ChangeView(0, 0, null, true);
+                    await SmokeCapture.SaveAsync(root, output, $"dashboard-connected-{suffix}-{theme}.png");
+                    var contentOrigin = HomePageContent.TransformToVisual(HomePage)
+                        .TransformPoint(new Windows.Foundation.Point());
+                    SmokeCapture.Require(contentOrigin.X >= -1 &&
+                        contentOrigin.X + HomePageContent.ActualWidth <= HomePage.ActualWidth + 1,
+                        "Dashboard content escaped the viewport.");
+                    MainNavigation.SelectedItem = FirmwareNavItem;
+                    FirmwarePage.ChangeView(0, 0, null, true);
+                    await SmokeCapture.SaveAsync(root, output, $"firmware-connected-{suffix}-{theme}.png");
+                }
+            }
+            NavigateShortcut_Click(new Button { Tag = "input" }, new RoutedEventArgs());
+            SmokeCapture.Require(Equals(MainNavigation.SelectedItem, InputNavItem) &&
+                InputPage.Visibility == Visibility.Visible, "Dashboard shortcut did not navigate to input tests.");
+            ActivateModule(_moduleRegistry.Find("sf32-unified")!);
+            RefreshFirmwareTargets();
+            SmokeCapture.Require(FirmwareUsbOtaButton.Visibility == Visibility.Collapsed &&
+                FirmwareRomExpander.IsExpanded,
+                "SF32 update UI exposed BL616 OTA instead of its supported serial path.");
+        }
+        finally
+        {
+            _client = null;
+            _lastDescriptor = null;
+            _status = new BridgeStatusSnapshot();
+            DeviceList.ItemsSource = null;
+            ActivateModule(previousModule);
+            SetConnectionAppearance(false, "未连接");
+            RefreshFirmwareTargets();
+        }
     }
 
     private void TestFirmwareUpdateControls()

@@ -11,8 +11,10 @@ using Windows.Storage.Pickers;
 
 namespace BridgeManager.Modern;
 
-public sealed partial class SetupWizardWindow
+public sealed partial class SetupWizardView
 {
+    private readonly Window _ownerWindow;
+    public event EventHandler? FlashBusyChanged;
     private BridgeFirmwareModuleRegistry _moduleRegistry;
     private readonly FirmwareFlashService _flashService = new();
     private readonly BridgeTransportFactory _transportFactory;
@@ -23,6 +25,7 @@ public sealed partial class SetupWizardWindow
     private readonly Func<string, BridgeFirmwareModuleRegistry>
         _installModulePackage;
     private readonly Action _completed;
+    private readonly Action<string, bool> _showStatus;
     private readonly Func<Task> _prepareFlashAsync;
     private readonly bool _discoverDevices;
     private bool _flashBusy;
@@ -45,15 +48,18 @@ public sealed partial class SetupWizardWindow
         public bool SaveToDevice { get; init; } = true;
     }
 
-    public SetupWizardWindow(
+    public SetupWizardView(
+        Window ownerWindow,
         BridgeFirmwareModuleRegistry moduleRegistry,
         Func<BridgeStatusSnapshot> getStatus,
         Func<WizardApplyRequest, Task<WizardApplyResult>> applySettingsAsync,
         Func<string, BridgeFirmwareModuleRegistry> installModulePackage,
         Action completed,
+        Action<string, bool> showStatus,
         Func<Task>? prepareFlashAsync = null,
         bool discoverDevices = true)
     {
+        _ownerWindow = ownerWindow;
         _moduleRegistry = moduleRegistry;
         _transportFactory = new BridgeTransportFactory(
             () => _moduleRegistry.GetHidDeviceProfiles());
@@ -61,23 +67,19 @@ public sealed partial class SetupWizardWindow
         _applySettingsAsync = applySettingsAsync;
         _installModulePackage = installModulePackage;
         _completed = completed;
+        _showStatus = showStatus;
         _prepareFlashAsync = prepareFlashAsync ?? (() => Task.CompletedTask);
         _discoverDevices = discoverDevices;
         InitializeComponent();
-        AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "ControllerBridge.ico"));
+        ActualThemeChanged += (_, _) => RefreshCreationSelections();
+        WizardLayout.LayoutUpdated += (_, _) => RefreshCreationSelections();
         WizardLayout.SizeChanged += WizardLayout_SizeChanged;
         PageScrolling.Attach(WizardScroller);
-        AppWindow.Resize(new SizeInt32(1040, 760));
         InitializeWizard();
         WizardDontShowAgainCheckBox.IsChecked = !ShouldShowOnStartup();
         _startupPreferenceLoaded = true;
-        AppWindow.Closing += (_, args) =>
-        {
-            if (!_flashBusy) return;
-            args.Cancel = true;
-            ShowStatus("烧录尚未结束，请保持连接并等待结果。", true);
-        };
         if (_discoverDevices) _ = RefreshDetectedDevicesAsync();
+        else DetectedDeviceStatusText.Text = "离线预览：未扫描真实设备，请从下方选择板卡。";
     }
 
     public static bool HasCompletedSetup()
@@ -171,6 +173,9 @@ public sealed partial class SetupWizardWindow
             }).ToArray();
             DetectedDeviceList.ItemsSource = items;
             var identified = items.Count(item => item.IdentifiesBoard);
+            DetectedDeviceExpander.Header = identified > 0
+                ? $"已识别 {identified} 个接收器 · 查看或更改"
+                : "未识别到板卡 · 手动选择或重新检测";
             DetectedDeviceStatusText.Text = items.Length == 0
                 ? "Windows 当前没有枚举到管理 HID 或串口。"
                 : $"Windows 实际枚举到 {items.Length} 个候选，其中 " +
@@ -215,6 +220,7 @@ public sealed partial class SetupWizardWindow
         if (board is not null)
         {
             WizardBoardList.SelectedItem = board;
+            DetectedDeviceExpander.Header = $"已识别 {board.DisplayName} · 可手动更改";
             ShowStatus(
                 $"依据 USB {item.Descriptor.VendorId:x4}:{item.Descriptor.ProductId:x4}" +
                 $" 的真实枚举信息选择了 {board.DisplayName}。",
@@ -300,7 +306,7 @@ public sealed partial class SetupWizardWindow
     {
         var picker = new FileOpenPicker();
         WinRT.Interop.InitializeWithWindow.Initialize(
-            picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+            picker, WinRT.Interop.WindowNative.GetWindowHandle(_ownerWindow));
         picker.FileTypeFilter.Add(".cbmodule");
         var file = await picker.PickSingleFileAsync();
         if (file is null) return;
@@ -335,7 +341,10 @@ public sealed partial class SetupWizardWindow
     {
         if (_flashBusy) return;
         _wizardStep = Math.Clamp(step, 1, 6);
-        WizardStepCounter.Text = $"步骤 {_wizardStep} / 6";
+        WizardHeader.Visibility = _wizardStep == 1 ? Visibility.Collapsed : Visibility.Visible;
+        WizardFooterActions.Visibility = _wizardStep == 1 ? Visibility.Collapsed : Visibility.Visible;
+        WizardFooter.BorderThickness = new Thickness(0, _wizardStep == 1 ? 0 : 1, 0, 0);
+        WizardFooter.RowSpacing = _wizardStep == 1 ? 0 : 18;
         WizardWelcomePanel.Visibility = _wizardStep == 1
             ? Visibility.Visible : Visibility.Collapsed;
         WizardBoardPanel.Visibility = _wizardStep == 2
@@ -350,28 +359,42 @@ public sealed partial class SetupWizardWindow
             ? Visibility.Visible : Visibility.Collapsed;
         WizardBackButton.Visibility = _wizardStep is >= 2 and <= 5
             ? Visibility.Visible : Visibility.Collapsed;
-        WizardNextButton.Visibility = _wizardStep is >= 2 and <= 5
-            ? Visibility.Visible : Visibility.Collapsed;
+        WizardNextButton.Content = _wizardStep switch
+        {
+            1 => "开始创建",
+            2 => "选择固件",
+            3 => "继续安装",
+            4 => "继续配置",
+            5 => "应用设置",
+            6 => "进入管理器",
+            _ => "下一步"
+        };
 
         (WizardStepTitle.Text, WizardStepSubtitle.Text) = _wizardStep switch
         {
-            2 => ("选择板卡", "先确认硬件型号，向导会过滤不兼容固件"),
-            3 => ("选择固件", "当前板卡的随包固件"),
-            4 => ("烧录固件", "检查下载环境后写入，已有固件也可以跳过"),
+            2 => ("选择你的板卡", "请选择手中的开发板型号，下一步只显示与它兼容的固件。"),
+            3 => ("选择兼容固件", $"{_wizardBoard?.DisplayName} · 仅列出适配此板卡的固件"),
+            4 => ("安装固件", "进入下载模式后检查连接，再确认写入；已有固件可跳过。"),
             5 => ("基本设置", "选择 USB 身份、无线输入与回报率"),
             6 => ("设置完成", "返回管理器连接设备并测试控制器"),
-            _ => ("欢迎使用 Controller Bridge", "用几步完成板卡、固件和手柄设置")
+            _ => ("开始创建", "确认硬件、安装固件，再完成接收器配置")
         };
 
-        var indicators = new FrameworkElement[]
+        var indicators = new Border[]
         {
             Step1Indicator, Step2Indicator, Step3Indicator,
             Step4Indicator, Step5Indicator, Step6Indicator
         };
         for (var index = 0; index < indicators.Length; index++)
         {
-            indicators[index].Opacity = index + 1 <= _wizardStep ? 1 : 0.45;
+            indicators[index].Opacity = index + 1 == _wizardStep ? 1 : 0.45;
+            indicators[index].BorderThickness = new Thickness(index + 1 == _wizardStep ? 2.5 : 1);
+            indicators[index].Width = indicators[index].Height = 9;
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(indicators[index],
+                $"第 {index + 1} 步，" + (index + 1 == _wizardStep ? "当前步骤" :
+                    index + 1 < _wizardStep ? "已经过" : "未开始"));
         }
+        WizardScroller.ChangeView(0, 0, null, true);
         if (_wizardStep == 5) PopulateWizardSettings();
         if (_wizardStep == 4) RefreshWizardPorts();
     }
@@ -384,6 +407,12 @@ public sealed partial class SetupWizardWindow
 
     private async void WizardNext_Click(object sender, RoutedEventArgs e)
     {
+        if (_flashBusy) return;
+        if (_wizardStep == 6)
+        {
+            WizardFinish_Click(sender, e);
+            return;
+        }
         if (_wizardStep == 2 && _wizardBoard is null)
         {
             ShowStatus("请选择板卡型号。", true);
@@ -407,6 +436,7 @@ public sealed partial class SetupWizardWindow
         object sender, SelectionChangedEventArgs e)
     {
         if (_flashBusy) return;
+        RefreshCreationSelections();
         _wizardBoard = WizardBoardList.SelectedItem as BridgeBoardDefinition;
         _wizardFirmware = null;
         if (_wizardBoard is null)
@@ -425,6 +455,7 @@ public sealed partial class SetupWizardWindow
         object sender, SelectionChangedEventArgs e)
     {
         if (_flashBusy) return;
+        RefreshCreationSelections();
         _wizardFirmware = WizardFirmwareList.SelectedItem as WizardFirmwareChoice;
         if (_wizardFirmware is null)
         {
@@ -589,7 +620,7 @@ public sealed partial class SetupWizardWindow
         {
             var dialog = new ContentDialog
             {
-                XamlRoot = Content.XamlRoot,
+                XamlRoot = this.XamlRoot,
                 Title = "确认烧录固件",
                 Content = $"{board?.DisplayName}\n{selection.Firmware.DisplayName} {selection.Firmware.Version}\n" +
                           $"写入目标：{check.Target}\n\n将暂时断开管理连接并更新固件。烧录期间请勿断电或拔线。",
@@ -618,6 +649,7 @@ public sealed partial class SetupWizardWindow
     private void SetFlashBusy(bool busy)
     {
         _flashBusy = busy;
+        FlashBusyChanged?.Invoke(this, EventArgs.Empty);
         foreach (var control in new Control[] {
             WizardBoardList, WizardFirmwareList, WizardPortBox, WizardRefreshPortsButton,
             WizardCheckFlashButton, WizardSkipFlashButton, WizardBackButton, WizardNextButton,
@@ -645,7 +677,6 @@ public sealed partial class SetupWizardWindow
         _wizardState = CaptureWizardState(completed: true);
         await SaveWizardStateAsync(_wizardState);
         _completed();
-        Close();
     }
 
     private WizardSetupState CaptureWizardState(bool completed) => new()
@@ -687,12 +718,7 @@ public sealed partial class SetupWizardWindow
     }
 
     private void ShowStatus(string message, bool error)
-    {
-        WizardInfoBar.Message = message;
-        WizardInfoBar.Severity = error
-            ? InfoBarSeverity.Error : InfoBarSeverity.Informational;
-        WizardInfoBar.IsOpen = true;
-    }
+        => _showStatus(message, error);
 
     private static string WizardStatePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

@@ -9,13 +9,14 @@ namespace BridgeManager.Modern;
 public sealed class ResponsiveItemsPanel : Panel
 {
     public double ItemMinWidth { get; set; } = 290;
+    public int MaxColumns { get; set; } = int.MaxValue;
     private double _rowHeight;
     private int _columns = 1;
 
     protected override Size MeasureOverride(Size availableSize)
     {
         var width = double.IsFinite(availableSize.Width) ? availableSize.Width : ItemMinWidth;
-        _columns = Math.Max(1, Math.Min(Math.Max(1, Children.Count),
+        _columns = Math.Max(1, Math.Min(Math.Min(MaxColumns, Math.Max(1, Children.Count)),
             (int)(width / ItemMinWidth)));
         var cellWidth = Math.Max(0, width / _columns);
         _rowHeight = 0;

@@ -12,7 +12,7 @@ public sealed partial class MainWindow
     private async Task CheckManagerUpdateAsync()
     {
         if (_checkingManagerUpdate) return;
-        if (_setupWizardWindow?.IsFlashing == true)
+        if (_setupWizardView?.IsFlashing == true || _firmwareFlashBusy)
         {
             ShowStatus("请等待固件烧录结束后再更新管理器。", true);
             return;
@@ -65,13 +65,12 @@ public sealed partial class MainWindow
                 ShowStatus($"安装包已保存：{path}", false);
                 return;
             }
-            if (_setupWizardWindow?.IsFlashing == true)
+            if (_setupWizardView?.IsFlashing == true || _firmwareFlashBusy)
             {
                 ShowStatus("固件烧录中，暂不启动管理器安装。", true);
                 return;
             }
             Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
-            _setupWizardWindow?.Close();
             Close();
         }
         catch (OperationCanceledException) { }
@@ -83,7 +82,7 @@ public sealed partial class MainWindow
         finally
         {
             _checkingManagerUpdate = false;
-            if (!_windowCancellation.IsCancellationRequested) UpdateNavItem.IsEnabled = true;
+            if (!_windowCancellation.IsCancellationRequested) UpdateNavigationBusy();
         }
     }
 }

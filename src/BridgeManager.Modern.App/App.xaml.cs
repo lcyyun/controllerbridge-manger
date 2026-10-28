@@ -1,5 +1,7 @@
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using BridgeManager.Core;
 
 namespace BridgeManager.Modern;
 
@@ -7,6 +9,7 @@ public partial class App : Application
 {
     private Window? _window;
     private DispatcherQueueTimer? _launchSmokeTimer;
+    private ManagerResourceLease? _instanceLease;
 
     public App()
     {
@@ -46,6 +49,13 @@ public partial class App : Application
             _ = RunMappingSmokeAsync(commandLine[mappingSmoke + 1]);
             return;
         }
+        // Offline render fixtures above never discover/open hardware. All
+        // interactive launches share one guard across folders and versions.
+        if (!ManagerResourceLease.TryAcquire("manager-interactive-ui", out _instanceLease))
+        {
+            ShowAlreadyRunning();
+            return;
+        }
         _window = new MainWindow();
         _window.Activate();
 
@@ -58,6 +68,21 @@ public partial class App : Application
             _launchSmokeTimer.Tick += (_, _) => Exit();
             _launchSmokeTimer.Start();
         }
+    }
+
+    private void ShowAlreadyRunning()
+    {
+        var close = new Button { Content = "关闭此提示", HorizontalAlignment = HorizontalAlignment.Right };
+        close.Click += (_, _) => { _window!.Close(); Exit(); };
+        var panel = new StackPanel { Padding = new Thickness(24), Spacing = 16 };
+        panel.Children.Add(new TextBlock { Text = "ControllerBridge Manager 已在运行", FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+        panel.Children.Add(new TextBlock { Text = "请使用已打开的窗口。重复启动会争用接收器管理回复，导致报错和反复重连。此窗口未连接设备。",
+            TextWrapping = TextWrapping.Wrap });
+        panel.Children.Add(close);
+        _window = new Window { Title = "ControllerBridge Manager — 已在运行", Content = panel };
+        _window.AppWindow.Resize(new Windows.Graphics.SizeInt32(500, 260));
+        _window.Activate();
     }
 
     private async Task RunMappingSmokeAsync(string outputDirectory)

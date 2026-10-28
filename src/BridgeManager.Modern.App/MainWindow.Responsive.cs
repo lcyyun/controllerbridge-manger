@@ -9,11 +9,13 @@ public sealed partial class MainWindow
     {
         var contentWidth = Math.Min(1180, Math.Max(0, e.NewSize.Width - 12));
         HomePageContent.Width = contentWidth;
+        CreateReceiverHost.Width = contentWidth;
         InputPageContent.Width = contentWidth;
         FeedbackPageContent.Width = contentWidth;
         FirmwarePageContent.Width = contentWidth;
         AdvancedPageContent.Width = contentWidth;
         DynamicModulePageContent.Width = contentWidth;
+        UpdateResponsiveLayout(MainNavigation.ActualWidth);
     }
 
     private void MainNavigation_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -21,9 +23,12 @@ public sealed partial class MainWindow
 
     private void UpdateResponsiveLayout(double width)
     {
-        var compact = width < 780;
-        var singleColumn = width < 980;
-        var phone = width < 600;
+        var contentWidth = PageContentHost.ActualWidth > 0
+            ? Math.Min(1180, PageContentHost.ActualWidth - 12) : width - 260;
+        var compact = contentWidth < 600;
+        var singleColumn = contentWidth < 880;
+        var phone = contentWidth < 420;
+        var stackedUpdate = contentWidth < 760;
 
         var paneMode = width < 720
             ? NavigationViewPaneDisplayMode.LeftCompact
@@ -35,16 +40,22 @@ public sealed partial class MainWindow
             ? new Thickness(12, 16, 8, 0)
             : new Thickness(24, 20, 12, 0);
 
-        ManagerUpdateActionColumn.Width = compact ? new GridLength(0) :
+        ManagerUpdateActionColumn.Width = stackedUpdate ? new GridLength(0) :
             GridLength.Auto;
-        Place(ManagerUpdateActions, compact ? 1 : 0, compact ? 1 : 2);
-        ManagerUpdateActions.HorizontalAlignment = compact
+        Place(ManagerUpdateActions, stackedUpdate ? 1 : 0, stackedUpdate ? 1 : 2);
+        ManagerUpdateActions.HorizontalAlignment = stackedUpdate
             ? HorizontalAlignment.Left : HorizontalAlignment.Right;
 
         Place(HeaderActions, compact ? 1 : 0, compact ? 0 : 1);
         HeaderActions.HorizontalAlignment = compact ? HorizontalAlignment.Left : HorizontalAlignment.Right;
         Place(HomeSelfTestButton, compact ? 1 : 0, compact ? 0 : 1);
         HomeSelfTestButton.HorizontalAlignment = compact ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
+        HomeConnectActionColumn.Width = phone ? new GridLength(0) : GridLength.Auto;
+        Place(HomeConnectActions, phone ? 1 : 0, phone ? 0 : 1);
+        Place(HomeDiagnosticsButton, phone ? 1 : 0, phone ? 0 : 1);
+        HomeDiagnosticsButton.HorizontalAlignment = HorizontalAlignment.Left;
+        HomeWirelessColumn.Width = singleColumn ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        Place(WirelessSection, singleColumn ? 1 : 0, singleColumn ? 0 : 1);
 
         SetHomeMetrics(compact);
         SetInputHealth(compact);
@@ -58,15 +69,16 @@ public sealed partial class MainWindow
     private void SetHomeMetrics(bool compact)
     {
         HomeMetricColumn1.Width = new GridLength(1, GridUnitType.Star);
-        HomeMetricColumn2.Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        HomeMetricColumn2.Width = new GridLength(1, GridUnitType.Star);
         HomeMetricColumn3.Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
 
         Place(RoleMetricPanel, 0, 0);
-        Place(InputMetricPanel, compact ? 1 : 0, compact ? 0 : 1);
-        Place(UsbMetricPanel, compact ? 2 : 0, compact ? 0 : 2);
-        InputMetricPanel.Padding = compact ? new Thickness(0, 16, 0, 0) : new Thickness(24, 0, 0, 0);
-        UsbMetricPanel.Padding = compact ? new Thickness(0, 16, 0, 0) : new Thickness(24, 0, 0, 0);
-        InputMetricPanel.BorderThickness = compact ? new Thickness(0, 1, 0, 0) : new Thickness(1, 0, 0, 0);
+        Place(InputMetricPanel, 0, 1);
+        Place(UsbMetricPanel, compact ? 1 : 0, compact ? 0 : 2);
+        Grid.SetColumnSpan(UsbMetricPanel, compact ? 2 : 1);
+        InputMetricPanel.Padding = new Thickness(compact ? 16 : 24, 0, 0, 0);
+        UsbMetricPanel.Padding = compact ? new Thickness(0, 12, 0, 0) : new Thickness(24, 0, 0, 0);
+        InputMetricPanel.BorderThickness = new Thickness(1, 0, 0, 0);
         UsbMetricPanel.BorderThickness = compact ? new Thickness(0, 1, 0, 0) : new Thickness(1, 0, 0, 0);
     }
 
@@ -79,7 +91,8 @@ public sealed partial class MainWindow
 
     private void SetInputLayout(bool singleColumn, bool phone)
     {
-        InputMainColumn.Width = new GridLength(1, GridUnitType.Star);
+        InputMainColumn.Width = new GridLength(singleColumn ? 1 : 1.7, GridUnitType.Star);
+        InputControllerArtworkHost.Height = phone ? 250 : singleColumn ? 320 : 360;
         InputDetailColumn.Width = singleColumn ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
         Place(InputPrimaryPanel, 0, 0);
         Place(InputDetailPanel, singleColumn ? 1 : 0, singleColumn ? 0 : 1);
@@ -128,8 +141,8 @@ public sealed partial class MainWindow
         FirmwareUpdateColumn.Width = new GridLength(1.05, GridUnitType.Star);
         FirmwareFlashColumn.Width = singleColumn ? new GridLength(0) :
             new GridLength(1, GridUnitType.Star);
-        Place(FirmwareUpdatePanel, 0, 0);
-        Place(FirmwareFlashPanel, singleColumn ? 1 : 0, singleColumn ? 0 : 1);
+        Place(FirmwareUpdateCard, 0, 0);
+        Place(FirmwareFlashCard, singleColumn ? 1 : 0, singleColumn ? 0 : 1);
     }
 
     private void SetAdvancedLayout(bool singleColumn)

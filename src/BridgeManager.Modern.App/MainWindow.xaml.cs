@@ -31,6 +31,7 @@ public sealed partial class MainWindow
 
     private readonly BridgeTransportFactory _transportFactory;
     private readonly DispatcherTimer _pollTimer = new();
+    private readonly DispatcherTimer _statusDismissTimer = new();
     private readonly DynamicModulePageRenderer _dynamicPageRenderer;
     private readonly List<NavigationViewItem> _dynamicNavigationItems = [];
     private BridgeFirmwareModuleRegistry _moduleRegistry;
@@ -49,7 +50,7 @@ public sealed partial class MainWindow
     private DeviceDescriptor? _lastDescriptor;
     private BridgeUsbRole _expectedRole = BridgeUsbRole.Unknown;
     private BridgeStatusSnapshot _status = new();
-    private SetupWizardWindow? _setupWizardWindow;
+    private SetupWizardView? _setupWizardView;
     private readonly bool _discoverDevices;
     private readonly InputReportBuffer _usbFrames = new();
     private readonly CancellationTokenSource _windowCancellation = new();
@@ -66,6 +67,12 @@ public sealed partial class MainWindow
             () => _moduleRegistry.GetHidDeviceProfiles());
         _module = _moduleRegistry.Fallback;
         InitializeComponent();
+        _statusDismissTimer.Interval = TimeSpan.FromSeconds(5);
+        _statusDismissTimer.Tick += (_, _) =>
+        {
+            _statusDismissTimer.Stop();
+            StatusBar.IsOpen = false;
+        };
         AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "ControllerBridge.ico"));
         MainNavigation.SizeChanged += MainNavigation_SizeChanged;
         foreach (var page in new[] { HomePage, InputPage, FeedbackPage, AdvancedPage, DynamicModulePage, FirmwarePage })
@@ -80,7 +87,7 @@ public sealed partial class MainWindow
         Closed += MainWindow_Closed;
         AppWindow.Closing += (_, args) =>
         {
-            if (_setupWizardWindow?.IsFlashing != true && !_firmwareFlashBusy) return;
+            if (_setupWizardView?.IsFlashing != true && !_firmwareFlashBusy) return;
             args.Cancel = true;
             ShowStatus("固件烧录尚未结束，请保持连接并等待结果。", true);
         };
@@ -94,9 +101,9 @@ public sealed partial class MainWindow
             _ = RefreshDevicesAsync();
             _ = RefreshInputSourcesAsync();
         }
-        if (_discoverDevices && SetupWizardWindow.ShouldShowOnStartup())
+        if (_discoverDevices && SetupWizardView.ShouldShowOnStartup())
         {
-            DispatcherQueue.TryEnqueue(OpenSetupWizard);
+            DispatcherQueue.TryEnqueue(OpenCreateReceiver);
         }
     }
 
@@ -105,9 +112,9 @@ public sealed partial class MainWindow
         _inputClosing = true;
         _windowCancellation.Cancel();
         _pollTimer.Stop();
+        _statusDismissTimer.Stop();
         _inputPaintTimer.Stop();
-        _setupWizardWindow?.Close();
-        _setupWizardWindow = null;
+        _setupWizardView = null;
         _connectionGeneration++;
         _autoReconnectEnabled = false;
         try
@@ -119,6 +126,25 @@ public sealed partial class MainWindow
     }
 
     private async void RefreshDevices_Click(object sender, RoutedEventArgs e) => await RefreshDevicesAsync();
+
+    private void NavigateShortcut_Click(object sender, RoutedEventArgs e)
+    {
+        var target = (sender as FrameworkElement)?.Tag?.ToString();
+        MainNavigation.SelectedItem = target switch
+        {
+            "input" => InputNavItem,
+            "feedback" => FeedbackNavItem,
+            "firmware" => FirmwareNavItem,
+            _ => AdvancedNavItem
+        };
+    }
+
+    private void ShowReceiverSelector_Click(object sender, RoutedEventArgs e)
+    {
+        MainNavigation.SelectedItem = HomeNavItem;
+        HomeConnectionOptions.Visibility = Visibility.Visible;
+        HomeConnectionOptions.IsExpanded = true;
+    }
 
     private async void Connect_Click(object sender, RoutedEventArgs e)
     {
@@ -136,7 +162,8 @@ public sealed partial class MainWindow
 
     private async Task<bool> ConnectDescriptorAsync(DeviceDescriptor descriptor, bool reconnecting = false)
     {
-        if (_inputClosing || _setupWizardWindow?.IsFlashing == true)
+        descriptor = _moduleRegistry.NormalizeDescriptor(descriptor);
+        if (_inputClosing || _setupWizardView?.IsFlashing == true)
         {
             ShowStatus("固件烧录期间暂不建立管理连接。", false);
             return false;
@@ -172,10 +199,9 @@ public sealed partial class MainWindow
             {
                 _expectedRole = descriptor.UsbRole;
             }
-            ConnectionText.Text = reconnecting ? "已自动重连" : "已连接";
+            ConnectionText.Text = "正在验证管理连接";
             TransportText.Text = descriptor.TransportLabel;
-            SetConnectionAppearance(true,
-                reconnecting ? "已重新连接" : "设备已连接");
+            SetConnectionAppearance(false, "正在验证连接");
             if (!_localInputActive) InputHealthText.Text = descriptor.SupportsInputReports
                 ? "等待 USB Input report"
                 : "当前管理 HID 没有 USB Input report";
@@ -187,6 +213,8 @@ public sealed partial class MainWindow
                 : reconnecting ? "USB HID 已在重枚举后自动恢复。" : "USB HID 已连接，可以开始完整功能测试。", false);
             RefreshFirmwareTargets();
             await RefreshStatusWithRetryAsync(logCommand: true);
+            ConnectionText.Text = reconnecting ? "已自动重连" : "已连接";
+            SetConnectionAppearance(true, reconnecting ? "已重新连接" : "设备已连接");
             _pollTimer.Start();
             return true;
         }
@@ -287,6 +315,12 @@ public sealed partial class MainWindow
         NavigationView sender,
         NavigationViewSelectionChangedEventArgs args)
     {
+        if ((_setupWizardView?.IsFlashing == true || _firmwareFlashBusy) &&
+            args.SelectedItem is NavigationViewItem { IsEnabled: false })
+        {
+            MainNavigation.SelectedItem = _setupWizardView?.IsFlashing == true ? WizardNavItem : FirmwareNavItem;
+            return;
+        }
         _dynamicPageRenderer?.SuspendCapture();
         var page = (args.SelectedItemContainer as NavigationViewItem)?.Tag?.ToString()
                    ?? "home";
@@ -294,6 +328,7 @@ public sealed partial class MainWindow
         InputPage.Visibility = page == "input" ? Visibility.Visible : Visibility.Collapsed;
         FeedbackPage.Visibility = page == "feedback" ? Visibility.Visible : Visibility.Collapsed;
         FirmwarePage.Visibility = page == "firmware" ? Visibility.Visible : Visibility.Collapsed;
+        CreateReceiverPage.Visibility = page == "create" ? Visibility.Visible : Visibility.Collapsed;
         AdvancedPage.Visibility = page == "advanced" ? Visibility.Visible : Visibility.Collapsed;
         var modulePage = page.StartsWith("module:", StringComparison.Ordinal);
         DynamicModulePage.Visibility = modulePage
@@ -303,14 +338,16 @@ public sealed partial class MainWindow
             "input" => ("手柄测试", "本机手柄与接收器输入"),
             "feedback" => ("震动与音频", "反馈测试与触觉状态"),
             "firmware" => ("固件更新", "GitHub 更新源、镜像校验与安全烧录"),
-            "advanced" => ("高级诊断", "设备选择、检查结果与原始数据"),
+            "create" => ("创建接收器", "选择板卡、安装固件，完成首次配置"),
+            "advanced" => ("设置与诊断", "设备设置、检查与详细日志"),
             _ when modulePage => DynamicPageTitle(page["module:".Length..]),
-            _ => ("概览", "设备、角色与无线连接")
+            _ => ("接收器", "连接手柄，选择输出身份")
         };
         if (modulePage)
         {
             _ = RenderDynamicPageAsync(page["module:".Length..]);
         }
+        if (page == "create") OpenCreateReceiver();
         if (page == "input") _ = RefreshInputSourcesAsync();
         else _ = StopLocalRumbleAsync();
     }
@@ -324,42 +361,39 @@ public sealed partial class MainWindow
             _ = CheckManagerUpdateAsync();
             return;
         }
-        if ((args.InvokedItemContainer as NavigationViewItem)?.Tag?.ToString() ==
-            "wizard")
-        {
-            OpenSetupWizard();
-        }
     }
 
-    private void OpenSetupWizard()
+    private void OpenCreateReceiver()
     {
-        if (_setupWizardWindow is not null)
+        if (_firmwareFlashBusy) return;
+        if (_setupWizardView is null)
         {
-            _setupWizardWindow.Activate();
-            return;
+            _setupWizardView = new SetupWizardView(
+                this, _moduleRegistry, () => _status,
+                ApplySetupWizardRequestAsync, InstallModulePackageFromWizard,
+                () =>
+                {
+                    MainNavigation.SelectedItem = HomeNavItem;
+                    _setupWizardView = null;
+                    CreateReceiverHost.Child = null;
+                    if (_discoverDevices) _ = RefreshDevicesAsync();
+                }, ShowStatus, prepareFlashAsync: DisconnectAsync, discoverDevices: _discoverDevices);
+            _setupWizardView.FlashBusyChanged += (_, _) => UpdateNavigationBusy();
+            CreateReceiverHost.Child = _setupWizardView;
         }
+        if (!ReferenceEquals(MainNavigation.SelectedItem, WizardNavItem))
+            MainNavigation.SelectedItem = WizardNavItem;
+    }
 
-        var window = new SetupWizardWindow(
-            _moduleRegistry,
-            () => _status,
-            ApplySetupWizardRequestAsync,
-            InstallModulePackageFromWizard,
-            () =>
-            {
-                MainNavigation.SelectedItem = HomeNavItem;
-                ShowPage("home");
-                _ = RefreshDevicesAsync();
-            }, prepareFlashAsync: DisconnectAsync);
-        _setupWizardWindow = window;
-        SetupWizardOwnership.SetOwner(window, this);
-        window.Closed += (_, _) =>
-        {
-            if (ReferenceEquals(_setupWizardWindow, window))
-            {
-                _setupWizardWindow = null;
-            }
-        };
-        window.Activate();
+    private void UpdateNavigationBusy()
+    {
+        var busy = _firmwareFlashBusy || _setupWizardView?.IsFlashing == true;
+        foreach (var item in MainNavigation.MenuItems.Concat(MainNavigation.FooterMenuItems)
+                     .OfType<NavigationViewItem>())
+            item.IsEnabled = !busy || ReferenceEquals(item, MainNavigation.SelectedItem);
+        foreach (var control in HeaderActions.Children.OfType<Control>())
+            control.IsEnabled = !busy;
+        if (_checkingManagerUpdate) UpdateNavItem.IsEnabled = false;
     }
 
     private BridgeFirmwareModuleRegistry InstallModulePackageFromWizard(
@@ -530,13 +564,14 @@ public sealed partial class MainWindow
             if (!_pollFailureReported)
             {
                 _pollFailureReported = true;
-                ShowStatus($"状态轮询暂时失败：{ex.Message}", true);
+                AppDiagnostics.Write($"status-poll profile={_lastDescriptor?.ProfileKey}; failures={_consecutivePollFailures}", ex);
+                ShowStatus($"状态轮询暂时失败：{FriendlyError(ex)}", true);
                 AppendLog(ex.ToString());
             }
             if (_consecutivePollFailures >= 3 && _autoReconnectEnabled &&
                 _lastDescriptor is not null)
             {
-                await RecoverConnectionAsync(_lastDescriptor, "USB 连接中断");
+                await RecoverConnectionAsync(_lastDescriptor, "管理通信连续失败");
             }
         }
         finally
@@ -595,13 +630,13 @@ public sealed partial class MainWindow
     private async Task RefreshDevicesAsync()
     {
         if (_inputClosing || _refreshingDevices || !_discoverDevices ||
-            _setupWizardWindow?.IsFlashing == true) return;
+            _setupWizardView?.IsFlashing == true) return;
         _refreshingDevices = true;
         try
         {
             var selectedId = (DeviceList.SelectedItem as DeviceDescriptor)?.Id;
             var devices = await _transportFactory.GetDevicesAsync(_windowCancellation.Token);
-            if (_inputClosing || _setupWizardWindow?.IsFlashing == true) return;
+            if (_inputClosing || _setupWizardView?.IsFlashing == true) return;
             DeviceList.ItemsSource = devices;
             var selected = devices.FirstOrDefault(device =>
                 string.Equals(device.Id, selectedId, StringComparison.OrdinalIgnoreCase))
@@ -783,6 +818,7 @@ public sealed partial class MainWindow
                     : "等待有效手柄输入";
                 AccelText.Text = "Accel：等待有效数据";
                 GyroText.Text = "Gyro：等待有效数据";
+                ResetInputVisuals();
             }
         }
         if (_status.ReportRateHz is double rate)
@@ -879,6 +915,7 @@ public sealed partial class MainWindow
             : $"输入正常：{sourceName}（USB 包 {_usbInputReports}）";
         if (!local) InputRateText.Text = $"USB 输入 · {_usbInputReports} 包";
         SetControllerArtwork(input.Source);
+        _controllerInputDiagram?.Update(input);
         var pressed = ButtonNames.Where((_, index) =>
             (input.Buttons & (1u << index)) != 0).ToArray();
         ButtonsText.Text = pressed.Length == 0 ? "无" : string.Join(" · ", pressed);
@@ -919,6 +956,7 @@ public sealed partial class MainWindow
 
     private void ResetInputVisuals()
     {
+        _controllerInputDiagram?.Reset();
         Canvas.SetLeft(LeftStickDot, 80.0);
         Canvas.SetTop(LeftStickDot, 80.0);
         Canvas.SetLeft(RightStickDot, 80.0);
@@ -929,6 +967,8 @@ public sealed partial class MainWindow
 
     private void SetConnectionAppearance(bool connected, string label)
     {
+        HomeConnectionOptions.IsExpanded = !connected;
+        HomeConnectionOptions.Visibility = connected ? Visibility.Collapsed : Visibility.Visible;
         ConnectionBadgeText.Text = label;
         ConnectionDot.Fill = new SolidColorBrush(connected
             ? Color.FromArgb(255, 38, 166, 154)
@@ -996,6 +1036,7 @@ public sealed partial class MainWindow
         }
 
         _reconnecting = true;
+        var receiverModule = _moduleRegistry.Resolve(previous);
         var generation = ++_connectionGeneration;
         try
         {
@@ -1017,7 +1058,9 @@ public sealed partial class MainWindow
                 var devices = await _transportFactory.GetDevicesAsync(_windowCancellation.Token);
                 if (_inputClosing || !_autoReconnectEnabled || generation != _connectionGeneration) return;
                 DeviceList.ItemsSource = devices;
-                var target = DeviceReconnectSelector.Select(devices, previous, _expectedRole);
+                var target = DeviceReconnectSelector.Select(
+                    devices.Select(_moduleRegistry.NormalizeDescriptor), previous, _expectedRole,
+                    receiverModule.Id != _moduleRegistry.Fallback.Id ? receiverModule.Matches : null);
                 if (target is null)
                 {
                     continue;
@@ -1101,8 +1144,6 @@ public sealed partial class MainWindow
     private void ActivateModule(IBridgeFirmwareModule module)
     {
         _module = module;
-        ModulePaneText.Text = module.Id == _moduleRegistry.Fallback.Id
-            ? "通用管理器" : module.BoardFamily;
         ActiveModuleText.Text =
             $"模块：{module.DisplayName} {module.ModuleVersion}";
 
@@ -1125,6 +1166,10 @@ public sealed partial class MainWindow
             ? Visibility.Visible : Visibility.Collapsed;
         InputSelectionSection.Visibility = hasInputs
             ? Visibility.Visible : Visibility.Collapsed;
+        InputPreferenceText.Visibility = hasInputs ? Visibility.Visible : Visibility.Collapsed;
+        WirelessHintText.Text = module.Id == "bl616-unified"
+            ? "自动搜索两种手柄，同时只连接一只。已配对手柄按键唤醒即可回连。"
+            : "查看配对与连接状态。支持的操作由接收器固件提供。";
         SaveSettingsButton.Visibility = module.Capabilities.Has(
             BridgeCapability.Settings) ? Visibility.Visible : Visibility.Collapsed;
         InputNavItem.Visibility = Visibility.Visible;
@@ -1169,6 +1214,7 @@ public sealed partial class MainWindow
         HomePage.Visibility = page == "home" ? Visibility.Visible : Visibility.Collapsed;
         InputPage.Visibility = page == "input" ? Visibility.Visible : Visibility.Collapsed;
         FeedbackPage.Visibility = page == "feedback" ? Visibility.Visible : Visibility.Collapsed;
+        CreateReceiverPage.Visibility = page == "create" ? Visibility.Visible : Visibility.Collapsed;
         AdvancedPage.Visibility = page == "advanced" ? Visibility.Visible : Visibility.Collapsed;
         DynamicModulePage.Visibility = page.StartsWith(
             "module:", StringComparison.Ordinal)
@@ -1292,8 +1338,9 @@ public sealed partial class MainWindow
 
     private void ReloadModuleRegistry(string preferredModuleId)
     {
-        _setupWizardWindow?.Close();
-        _setupWizardWindow = null;
+        if (_setupWizardView?.IsFlashing == true) return;
+        _setupWizardView = null;
+        CreateReceiverHost.Child = null;
         _moduleRegistry = CreateModuleRegistry();
         _module = _moduleRegistry.Find(preferredModuleId) ??
                   (_lastDescriptor is null
@@ -1444,12 +1491,15 @@ public sealed partial class MainWindow
         if (_inputClosing) return;
         StatusBar.Severity = error ? Microsoft.UI.Xaml.Controls.InfoBarSeverity.Error : Microsoft.UI.Xaml.Controls.InfoBarSeverity.Informational;
         StatusBar.Message = message;
+        StatusBar.IsOpen = true;
+        _statusDismissTimer.Stop();
+        if (!error) _statusDismissTimer.Start();
     }
 
     private static string FriendlyError(Exception error)
     {
         return error.Message.Contains("reply length changed", StringComparison.OrdinalIgnoreCase)
-            ? "设备正被另一个管理器占用。请关闭经典版后重试。"
+            ? "管理回复在读取时发生变化，可能有其他 Manager 或工具同时通信。请只保留一个管理连接。"
             : error.Message;
     }
 
