@@ -297,8 +297,9 @@ cannot run if its binary hash differs from the compiled pin.
 Offline validation: Core tests cover NSM1 transactions/fragments, physical
 telemetry, unsafe/corrupted/wrong-board bundles and a fake executable that
 verifies chip-probe/write/readback ordering without opening serial ports.
-`BridgeManager.Modern.App.exe --esp32s3-smoke <output>` exercises real NSM1
-client-to-UI behavior with an in-memory transport, including source epoch,
-wrap, duplicate counters, vector controls, stale reset and update pages.
+`BridgeManager.Modern.App.exe --shell-smoke <output>` exercises the shared
+shell and NSM1 client-to-UI behavior with in-memory transports, including
+physical input snapshots, vector controls, stale reset, role transitions,
+ESP reset completion, feedback configuration and firmware update pages.
 Hardware enumeration, host drivers, actual flashing/recovery and controllers
 still require hardware validation.
