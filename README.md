@@ -43,8 +43,10 @@ Native NS2Pro initialization and direct-PC rumble are not implemented by the
 independent input tester. Receiver-based input and rumble use their existing
 firmware paths.
 
-The 0.3.7-preview.1 release preserves BL616 0.2.3-preview.1 and integrates new
-SF32, Pico and ESP32-S3 modules. Enable "包含预发布版本" in Manager update checks.
+The 0.3.8-preview.1 release keeps the four firmware modules and exact hashes from
+0.3.7-preview.1. Create Receiver now shows one ESP32-S3 device card, followed by
+explicit board variants with Flash/PSRAM capacities. A family or USB identity
+does not select a memory variant. Enable "包含预发布版本" in Manager update checks.
 Updating the app does not flash a receiver; install its firmware separately.
 ESP32-S3 accepts NS2Pro through BLE; its USB outputs still include DualSense,
 DualSense Edge, XInput and NS2Pro. SF32 and Pico also accept DualSense/Edge through
