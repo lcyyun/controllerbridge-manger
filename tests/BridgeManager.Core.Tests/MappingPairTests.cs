@@ -43,6 +43,48 @@ internal static class MappingPairTests
         Equal(1, BridgeButtonMapping.Parameters(Control("ds5", null)).Count);
     }
 
+    public static void Bl616Profiles()
+    {
+        IBridgeFirmwareModule[] modules =
+        [
+            new Bl616UnifiedFirmwareModule(),
+            BridgeModulePackageLoader.LoadFile(Path.Combine(FindRepository(), "modules",
+                "bl616-unified", "bl616-unified.bridge-module.json"))
+        ];
+        foreach (var module in modules)
+        {
+            var controls = module.Pages.SelectMany(page => page.Sections)
+                .SelectMany(section => section.Controls).ToArray();
+            Equal(2, controls.Length);
+            foreach (var profile in Profiles)
+            {
+                var control = controls.Single(item => item.MappingProfile == profile);
+                Equal<string?>(null, control.MappingOutput);
+                var parameters = BridgeButtonMapping.Parameters(control, "south", "east");
+                Equal(false, parameters.ContainsKey("output"));
+                foreach (var (action, verb) in new[]
+                {
+                    (control.ReadAction!, "get"), (control.ApplyAction!, "set"),
+                    (control.ResetAction!, "reset"), (control.SaveAction!, "save")
+                })
+                    Equal($"mapping {verb} {profile}" + (verb == "set" ? " south east" : ""),
+                        BridgeModuleOperationEngine.BuildRequest(module.Operations[action], parameters));
+                var reply = new JsonObject
+                {
+                    ["ok"] = true, ["profile"] = profile, ["dirty"] = false,
+                    ["entries"] = Entries("object")
+                };
+                Equal(25, Read(control, reply).Count);
+                reply["entries"]!["south"] = "east";
+                Equal("east", Read(control, reply)["south"]);
+                reply["profile"] = Other(profile);
+                Reject(() => Read(control, reply));
+                reply.Remove("profile");
+                Reject(() => Read(control, reply));
+            }
+        }
+    }
+
     public static void Replies()
     {
         foreach (var profile in Profiles)

@@ -8,6 +8,8 @@ Windows desktop manager for ControllerBridge receivers.
 - Live input from USB reports, never from serial/status snapshots.
 - Independent Windows Gamepad and native DualSense input testing.
 - Responsive light/dark interface with live controller button, stick and trigger visualization.
+- Source-frame-deduplicated BL616 input rate and honest source battery telemetry on the card dashboard.
+- BL616 mappings are saved per physical controller, across USB output identities.
 - Single interactive Manager instance and exclusive management-command ownership.
 
 The maintained receiver targets are BL616, ESP32-S3, SF32LB52 and Pico 2 W.
@@ -39,6 +41,12 @@ replies and reconnects. USB input-only observers remain permitted.
 Native NS2Pro initialization and direct-PC rumble are not implemented by the
 independent input tester. Receiver-based input and rumble use their existing
 firmware paths.
+
+The 0.3.6-preview.1 test release bundles BL616 0.2.3-preview.1 with NS2Pro wake
+reconnect recovery and source-frame counters. Enable "包含预发布版本" in Manager
+update checks. Install the BL616 firmware separately from the firmware page to
+enable the new counters and reconnect behavior. NS2Pro battery is currently
+unknown; an emulated DualSense battery placeholder is not treated as a reading.
 
 ## Build
 

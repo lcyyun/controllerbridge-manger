@@ -189,6 +189,26 @@
                                 </StackPanel>
                             </Border>
 
+                            <Grid x:Name="ReceiverTelemetryGrid" ColumnSpacing="20" RowSpacing="20">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition x:Name="ReceiverTelemetryColumn" Width="*" /></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                <Border Style="{StaticResource BridgeCardStyle}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="有效输入率（去重）" Style="{StaticResource QuietCaptionStyle}" />
+                                        <TextBlock x:Name="ActualReportRateText" Text="—" Style="{StaticResource BridgeMetricStyle}" />
+                                        <TextBlock x:Name="ActualReportRateDetail" Text="等待 USB HID 报告" Style="{StaticResource QuietCaptionStyle}" TextWrapping="Wrap" />
+                                        <TextBlock x:Name="RawUsbReportRateText" Text="USB 原始实收：暂不可测" Style="{StaticResource QuietCaptionStyle}" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+                                <Border x:Name="HomeBatteryCard" Grid.Column="1" Style="{StaticResource BridgeCardStyle}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="手柄电量" Style="{StaticResource QuietCaptionStyle}" />
+                                        <TextBlock x:Name="HomeBatteryText" Text="—" Style="{StaticResource BridgeMetricStyle}" />
+                                        <TextBlock x:Name="HomeBatteryDetail" Text="等待有效手柄输入" Style="{StaticResource QuietCaptionStyle}" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+
                             <Grid x:Name="RoleAndWirelessSection" ColumnSpacing="20" RowSpacing="20">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition x:Name="HomeWirelessColumn" Width="*" /></Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>

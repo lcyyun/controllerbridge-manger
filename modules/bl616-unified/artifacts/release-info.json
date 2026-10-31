@@ -1,0 +1,13 @@
+{
+  "moduleVersion": "0.2.3-preview.1",
+  "buildNumber": 1793444905,
+  "hardwareTested": false,
+  "otaSigned": true,
+  "usbPreviewIdentity": "FFFE:CB16",
+  "description": "NS2Pro wake reconnect recovery, source-frame deduplication and source battery telemetry.",
+  "tests": [
+    "100 reconnect failure/retry cycles",
+    "runtime and NVDS",
+    "OTA service with real signature verification"
+  ]
+}

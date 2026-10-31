@@ -38,6 +38,7 @@ public sealed partial class MainWindow
         _localControllers.ReadFailed += LocalInputFailed;
         _inputWatchdog.Tick += (_, _) =>
         {
+            UpdateHomeTelemetry();
             if (!_localInputActive || _localReadError is not null) return;
             var now = DateTimeOffset.UtcNow;
             if (_lastLocalInput is null || now - _lastLocalInput > TimeSpan.FromSeconds(2))
@@ -50,7 +51,7 @@ public sealed partial class MainWindow
             {
                 var samples = Interlocked.Read(ref _localSamples);
                 var unit = _selectedLocalDevice?.Id.StartsWith("hid:", StringComparison.Ordinal) == true
-                    ? "包/秒 · HID 实收" : "次/秒 · API 采样";
+                    ? "包/秒 · HID 原始实收（未去重）" : "次/秒 · API 采样";
                 InputRateText.Text = $"{(samples - _rateSamples) / elapsed:0} {unit}";
                 _rateSamples = samples;
                 _rateStart = now;
@@ -175,6 +176,8 @@ public sealed partial class MainWindow
         {
             _usbInputReports = usb.ReportCount;
             _lastUsbInputAt = usb.ReceivedAt;
+            _receiverRate.Observe(usb.ReportCount, Environment.TickCount64);
+            _receiverBattery = usb.Input.BatteryPercent;
             if (!_localInputActive && InputPage.Visibility == Visibility.Visible)
                 UpdateInputDisplay(usb.Input);
             _dynamicPageRenderer.OnInputSnapshot(usb.Input,

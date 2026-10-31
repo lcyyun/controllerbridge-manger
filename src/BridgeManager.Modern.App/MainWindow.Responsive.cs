@@ -55,6 +55,8 @@ public sealed partial class MainWindow
         Place(HomeDiagnosticsButton, phone ? 1 : 0, phone ? 0 : 1);
         HomeDiagnosticsButton.HorizontalAlignment = HorizontalAlignment.Left;
         HomeWirelessColumn.Width = singleColumn ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        ReceiverTelemetryColumn.Width = singleColumn ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        Place(HomeBatteryCard, singleColumn ? 1 : 0, singleColumn ? 0 : 1);
         Place(WirelessSection, singleColumn ? 1 : 0, singleColumn ? 0 : 1);
 
         SetHomeMetrics(compact);

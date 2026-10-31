@@ -315,15 +315,18 @@ public sealed partial class MainWindow
         NavigationView sender,
         NavigationViewSelectionChangedEventArgs args)
     {
+        // Removing a module item can deliver a delayed clear event after the
+        // user has selected another page. Never navigate from a stale event.
+        if (sender.SelectedItem is not NavigationViewItem selected ||
+            !ReferenceEquals(args.SelectedItem, selected)) return;
         if ((_setupWizardView?.IsFlashing == true || _firmwareFlashBusy) &&
-            args.SelectedItem is NavigationViewItem { IsEnabled: false })
+            !selected.IsEnabled)
         {
             MainNavigation.SelectedItem = _setupWizardView?.IsFlashing == true ? WizardNavItem : FirmwareNavItem;
             return;
         }
         _dynamicPageRenderer?.SuspendCapture();
-        var page = (args.SelectedItemContainer as NavigationViewItem)?.Tag?.ToString()
-                   ?? "home";
+        var page = selected.Tag?.ToString() ?? "home";
         HomePage.Visibility = page == "home" ? Visibility.Visible : Visibility.Collapsed;
         InputPage.Visibility = page == "input" ? Visibility.Visible : Visibility.Collapsed;
         FeedbackPage.Visibility = page == "feedback" ? Visibility.Visible : Visibility.Collapsed;
@@ -794,6 +797,7 @@ public sealed partial class MainWindow
     {
         if (_inputClosing) return;
         _status = _status.Merge(BridgeStatusSnapshot.Parse(root));
+        ObserveEffectiveInputRate(root);
         if (_status.UsbRole != BridgeUsbRole.Unknown)
         {
             _expectedRole = _status.UsbRole;
@@ -825,7 +829,7 @@ public sealed partial class MainWindow
         {
             var mountedText = _status.UsbMounted is bool mounted
                 ? mounted ? " · 已挂载" : " · 未挂载" : "";
-            UsbText.Text = $"{rate:0} Hz{mountedText}";
+            UsbText.Text = $"目标 {rate:0} Hz{mountedText}";
             RateBox.Value = rate;
         }
         else if (_status.UsbMounted is bool mounted)
@@ -913,7 +917,7 @@ public sealed partial class MainWindow
                 ? "NS2Pro" : input.Source;
         InputHealthText.Text = local ? $"输入正常：{_selectedLocalDevice?.DisplayName ?? sourceName}"
             : $"输入正常：{sourceName}（USB 包 {_usbInputReports}）";
-        if (!local) InputRateText.Text = $"USB 输入 · {_usbInputReports} 包";
+        if (!local) InputRateText.Text = $"有效输入 {ActualReportRateText.Text}（源帧去重） · USB 原始实收 {_usbInputReports} 包";
         SetControllerArtwork(input.Source);
         _controllerInputDiagram?.Update(input);
         var pressed = ButtonNames.Where((_, index) =>
@@ -926,7 +930,7 @@ public sealed partial class MainWindow
         UpdateStickVisual(RightStickDot, input.RightX, input.RightY);
         LeftTriggerBar.Value = input.LeftTrigger;
         RightTriggerBar.Value = input.RightTrigger;
-        BatteryText.Text = input.BatteryPercent is int battery
+        BatteryText.Text = (local ? input.BatteryPercent : ReceiverBatteryPercent) is int battery
             ? $"电量：{battery}%" : "电量：未知";
         AccelText.Text = input.MotionValid
             ? $"Accel X {input.AccelX,6} / Y {input.AccelY,6} / Z {input.AccelZ,6}"
@@ -1007,6 +1011,15 @@ public sealed partial class MainWindow
         }
         _usbInputReports = 0;
         _lastUsbInputAt = null;
+        _receiverRate.Reset();
+        _effectiveInputRate.Reset();
+        _effectiveRateSupported = false;
+        _effectiveRateSource = null;
+        _effectiveRateReceivedAt = null;
+        _receiverBattery = null;
+        _hasBatteryTelemetry = false;
+        _reportedBattery = null;
+        if (!_inputClosing) UpdateHomeTelemetry();
         if (clearSummary && !_inputClosing)
         {
             _status = new BridgeStatusSnapshot();
@@ -1214,6 +1227,7 @@ public sealed partial class MainWindow
         HomePage.Visibility = page == "home" ? Visibility.Visible : Visibility.Collapsed;
         InputPage.Visibility = page == "input" ? Visibility.Visible : Visibility.Collapsed;
         FeedbackPage.Visibility = page == "feedback" ? Visibility.Visible : Visibility.Collapsed;
+        FirmwarePage.Visibility = page == "firmware" ? Visibility.Visible : Visibility.Collapsed;
         CreateReceiverPage.Visibility = page == "create" ? Visibility.Visible : Visibility.Collapsed;
         AdvancedPage.Visibility = page == "advanced" ? Visibility.Visible : Visibility.Collapsed;
         DynamicModulePage.Visibility = page.StartsWith(
@@ -1223,6 +1237,12 @@ public sealed partial class MainWindow
 
     private void RebuildDynamicNavigation(IBridgeFirmwareModule module)
     {
+        var selectedTag = (MainNavigation.SelectedItem as NavigationViewItem)?.Tag?.ToString();
+        // Removing a selected module page otherwise leaves NavigationView's
+        // selection model pointing at a stale item/index. Clear it before
+        // changing the collection, then restore a current item by stable tag.
+        if (MainNavigation.SelectedItem is NavigationViewItem selected &&
+            _dynamicNavigationItems.Contains(selected)) MainNavigation.SelectedItem = null;
         foreach (var item in _dynamicNavigationItems)
         {
             MainNavigation.MenuItems.Remove(item);
@@ -1244,6 +1264,9 @@ public sealed partial class MainWindow
             MainNavigation.MenuItems.Insert(insertion++, item);
             _dynamicNavigationItems.Add(item);
         }
+        MainNavigation.SelectedItem = MainNavigation.MenuItems
+            .Concat(MainNavigation.FooterMenuItems).OfType<NavigationViewItem>()
+            .FirstOrDefault(item => Equals(item.Tag, selectedTag)) ?? HomeNavItem;
     }
 
     private async Task RenderDynamicPageAsync(string pageId)

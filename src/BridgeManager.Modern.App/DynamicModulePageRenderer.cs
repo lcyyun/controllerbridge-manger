@@ -681,7 +681,7 @@ internal sealed partial class DynamicModulePageRenderer
         catch (Exception ex)
         {
             if (version != _mappingVersion) return;
-            var legacy = definition.MappingProfile is not null &&
+            var legacy = definition.MappingOutput is not null &&
                 (ex.Message.Contains("usage: mapping", StringComparison.OrdinalIgnoreCase) ||
                  ex.Message.Contains("独立映射", StringComparison.Ordinal));
             var message = legacy

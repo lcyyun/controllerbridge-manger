@@ -1,10 +1,36 @@
 {
   "schemaVersion": 1,
   "runtimeApiVersion": 2,
-  "operations": {},
-  "pages": [],
+  "operations": {
+    "mapping.read": { "transport": "ManagerCommand", "request": "mapping get {profile}" },
+    "mapping.set": { "transport": "ManagerCommand", "request": "mapping set {profile} {target} {source}" },
+    "mapping.reset": { "transport": "ManagerCommand", "request": "mapping reset {profile}" },
+    "mapping.save": { "transport": "ManagerCommand", "request": "mapping save {profile}" }
+  },
+  "pages": [
+    {
+      "id": "bl616-ds5-mapping", "label": "DualSense / DualSense Edge 映射",
+      "description": "按输入手柄保存，适用于该手柄的所有 USB 输出身份。", "icon": "Game",
+      "sections": [{ "id": "ds5-buttons", "label": "按键映射", "controls": [{
+        "id": "bl616-ds5-button-map", "type": "MappingEditor", "label": "DualSense / DualSense Edge 按键来源",
+        "binding": "/entries", "mappingProfile": "ds5",
+        "sourceCatalog": "controller.inputControls", "targetCatalog": "bridge.outputControls",
+        "readAction": "mapping.read", "applyAction": "mapping.set", "resetAction": "mapping.reset", "saveAction": "mapping.save"
+      }] }]
+    },
+    {
+      "id": "bl616-ns2pro-mapping", "label": "Nintendo NS2Pro 映射",
+      "description": "按输入手柄保存，适用于该手柄的所有 USB 输出身份。", "icon": "Game",
+      "sections": [{ "id": "ns2pro-buttons", "label": "按键映射", "controls": [{
+        "id": "bl616-ns2pro-button-map", "type": "MappingEditor", "label": "Nintendo NS2Pro 按键来源",
+        "binding": "/entries", "mappingProfile": "ns2pro",
+        "sourceCatalog": "controller.inputControls", "targetCatalog": "bridge.outputControls",
+        "readAction": "mapping.read", "applyAction": "mapping.set", "resetAction": "mapping.reset", "saveAction": "mapping.save"
+      }] }]
+    }
+  ],
   "id": "bl616-unified",
-  "moduleVersion": "0.2.2-preview.1",
+  "moduleVersion": "0.2.3-preview.1",
   "displayName": "ControllerBridge BL616",
   "boardFamily": "Bouffalo Lab BL616",
   "description": "BL616 上统一接收 DualSense 与 Nintendo NS2Pro。",
@@ -64,8 +90,8 @@
   "firmware": [
     {
       "id": "bl616-unified-current", "displayName": "ControllerBridge BL616",
-      "version": "0.2.2-preview.1",
-      "description": "开发预览：Xbox 身份使用未分配的临时 FFFE:CB16；支持签名 USB OTA。非正式 USB ID。",
+      "version": "0.2.3-preview.1",
+      "description": "测试版：NS2Pro 唤醒回连修复、源帧去重计数；支持签名 USB OTA。Xbox 使用临时 FFFE:CB16。尚未完成实机验收。",
       "boardIds": ["bl616-devkit"], "flashMethod": "BouffaloUart",
       "artifactRelativePath": "artifacts/blflash.json",
       "flashHint": "先让 BL616 进入 UART 下载模式，再选择其下载串口，以 2,000,000 baud 校验写入。"

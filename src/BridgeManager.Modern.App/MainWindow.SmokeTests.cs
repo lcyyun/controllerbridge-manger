@@ -24,6 +24,14 @@ public sealed partial class MainWindow
         _module = _moduleRegistry.Find("sf32-unified")!;
         InitializeModuleUi();
         await DisconnectAsync();
+        MainNavigation.SelectedItem = _dynamicNavigationItems.Single(item => Equals(item.Tag, "module:mapping"));
+        ActivateModule(_moduleRegistry.Find("bl616-unified")!);
+        ActivateModule(_moduleRegistry.Find("sf32-unified")!);
+        MainNavigation.SelectedItem = InputNavItem;
+        await Task.Delay(80);
+        SmokeCapture.Require(InputPage.Visibility == Visibility.Visible && HomePage.Visibility == Visibility.Collapsed,
+            "Rebuilding module navigation broke subsequent page selection.");
+        MainNavigation.SelectedItem = HomeNavItem;
         ShowManagerUpdate(new ManagerReleaseUpdate("9.9.9", "界面测试更新",
             "https://github.com/lcyyun/controllerbridge-manger/releases/tag/v9.9.9",
             "https://github.com/lcyyun/controllerbridge-manger/releases/download/v9.9.9/test.zip",
@@ -97,7 +105,18 @@ public sealed partial class MainWindow
                 (AdvancedNavItem, "advanced") })
             {
                 MainNavigation.SelectedItem = item;
-                ShowPage(tag);
+                await Task.Delay(80);
+                var visiblePage = tag switch
+                {
+                    "input" => InputPage, "feedback" => FeedbackPage,
+                    "firmware" => FirmwarePage, "advanced" => AdvancedPage,
+                    _ => HomePage
+                };
+                SmokeCapture.Require(visiblePage.Visibility == Visibility.Visible &&
+                    new FrameworkElement[] { HomePage, InputPage, FeedbackPage, FirmwarePage, AdvancedPage,
+                        CreateReceiverPage, DynamicModulePage }
+                        .Count(page => page.Visibility == Visibility.Visible) == 1,
+                    $"Navigation did not display only {tag} at {width}px.");
                 PageSubtitleText.Text = "界面测试 · 离线数据 · 未连接设备";
                 if (tag == "input")
                 {
@@ -117,7 +136,7 @@ public sealed partial class MainWindow
                         "Local input was incorrectly gated on the receiver connection.");
                     SmokeCapture.Require(_controllerInputDiagram?.IsHighlighted(0) == true &&
                         Math.Abs(_controllerInputDiagram.LeftTriggerLevel - 0.5) < 0.001 &&
-                        _controllerInputDiagram.LeftStickOffset == new Windows.Foundation.Point(11, 5.5),
+                        _controllerInputDiagram.LeftStickOffset == new Windows.Foundation.Point(9, 4.5),
                         "Live controller artwork did not follow the displayed input sample.");
                     var previous = InputHealthText.Text;
                     UpdateSummary(System.Text.Json.JsonSerializer.SerializeToElement(new
@@ -236,6 +255,10 @@ public sealed partial class MainWindow
     {
         AppWindow.Resize(new SizeInt32(1360, 1000));
         MainNavigation.SelectedItem = InputNavItem;
+        await Task.Delay(80);
+        SmokeCapture.Require(InputPage.Visibility == Visibility.Visible &&
+            HomePage.Visibility == Visibility.Collapsed,
+            "Input selection highlighted the sidebar without displaying the input page.");
         _localInputActive = true;
         try
         {
@@ -266,12 +289,17 @@ public sealed partial class MainWindow
                     LeftTrigger = 49151, RightTrigger = 16384
                 };
                 UpdateInputDisplay(pressed, local: true);
-                SmokeCapture.Require(diagram.LeftStickOffset == new Windows.Foundation.Point(-11, -11) &&
-                    diagram.RightStickOffset == new Windows.Foundation.Point(5.5, 11) &&
+                SmokeCapture.Require(diagram.LeftStickOffset == new Windows.Foundation.Point(-9, -9) &&
+                    diagram.RightStickOffset == new Windows.Foundation.Point(4.5, 9) &&
                     Math.Abs(diagram.LeftTriggerLevel - 0.75) < 0.001 &&
                     Math.Abs(diagram.RightTriggerLevel - 0.25) < 0.001 &&
                     diagram.IsHighlighted(10) && diagram.IsHighlighted(11) && !diagram.IsHighlighted(9),
                     $"{suffix} analog motion, trigger depth or simultaneous buttons were incorrect.");
+                UpdateInputDisplay(pressed with { LeftX = 32767, LeftY = 32767 }, local: true);
+                SmokeCapture.Require(Math.Abs(Math.Sqrt(Math.Pow(diagram.LeftStickOffset.X, 2) +
+                    Math.Pow(diagram.LeftStickOffset.Y, 2)) - 18) < 0.001,
+                    $"{suffix} diagonal stick motion escaped the circular gate.");
+                UpdateInputDisplay(pressed, local: true);
                 foreach (var theme in new[] { ElementTheme.Light, ElementTheme.Dark })
                 {
                     root.RequestedTheme = theme;
@@ -360,6 +388,30 @@ public sealed partial class MainWindow
                 InputPreferenceText.Visibility == Visibility.Collapsed &&
                 !FirmwareRomExpander.IsExpanded && FirmwareUsbOtaButton.IsEnabled,
                 "Connected dashboard did not simplify its connection or update actions.");
+            _receiverBattery = 100; // DS5 persona's placeholder for an NS2 input.
+            UpdateHomeTelemetry();
+            SmokeCapture.Require(ActualReportRateText.Text == "—" && HomeBatteryText.Text == "—",
+                "Legacy USB target rate or emulated battery was presented as real telemetry.");
+            UpdateSummary(System.Text.Json.JsonSerializer.SerializeToElement(new {
+                active_input = "ns2pro", input_valid = true, input_stale = false,
+                input_rate_supported = true, unique_input_reports = 1000,
+                input_rate_time_ms = 1000, input_battery_percent = -1
+            }));
+            UpdateSummary(System.Text.Json.JsonSerializer.SerializeToElement(new {
+                active_input = "ns2pro", input_valid = true, input_stale = false,
+                input_rate_supported = true, unique_input_reports = 1125,
+                input_rate_time_ms = 2000, input_battery_percent = -1
+            }));
+            SmokeCapture.Require(ActualReportRateText.Text == "125 Hz" && HomeBatteryText.Text == "—",
+                "Source-frame rate or unknown battery telemetry was not rendered correctly.");
+            // Polling the same cached response must not count it again.
+            UpdateSummary(System.Text.Json.JsonSerializer.SerializeToElement(new {
+                active_input = "ns2pro", input_valid = true, input_stale = false,
+                input_rate_supported = true, unique_input_reports = 1125,
+                input_rate_time_ms = 2000, input_battery_percent = 80
+            }));
+            SmokeCapture.Require(ActualReportRateText.Text == "125 Hz" && HomeBatteryText.Text == "80%",
+                "Repeated source counters inflated the rate, or explicit battery was ignored.");
             ShowReceiverSelector_Click(new Button(), new RoutedEventArgs());
             SmokeCapture.Require(HomeConnectionOptions.Visibility == Visibility.Visible &&
                 HomeConnectionOptions.IsExpanded, "Connected device selector could not be reopened.");

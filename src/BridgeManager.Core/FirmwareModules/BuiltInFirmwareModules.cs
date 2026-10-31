@@ -172,6 +172,11 @@ public sealed class Sf32UnifiedFirmwareModule : BridgeFirmwareModuleBase
 
 public sealed class Bl616UnifiedFirmwareModule : BridgeFirmwareModuleBase
 {
+    public override IReadOnlyDictionary<string, BridgeModuleOperationDefinition> Operations =>
+        Bl616MappingDefinitions.Operations;
+    public override IReadOnlyList<BridgeModulePageDefinition> Pages =>
+        Bl616MappingDefinitions.Pages;
+
     private static readonly IReadOnlyList<BridgeBoardDefinition> KnownBoards =
     [
         new("bl616-devkit", "Bouffalo Lab BL616", "BL616",

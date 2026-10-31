@@ -22,6 +22,10 @@ public sealed partial class MainWindow
         if (_dynamicPageRenderer.IsApplyingMapping) return;
         var version = ++_mappingWorkspaceVersion;
         DynamicModulePageContent.Children.Clear();
+        var perInputOnly = _module.Pages.SelectMany(page => page.Sections)
+            .SelectMany(section => section.Controls)
+            .Where(control => control.Type == BridgeModuleControlType.MappingEditor)
+            .All(control => control.MappingOutput is null);
         var choices = new[]
         {
             new MappingChoice("ds5", "DualSense / PS"),
@@ -45,7 +49,19 @@ public sealed partial class MainWindow
         Grid.SetColumn(_mappingOutputChoice, 1);
         header.Children.Add(_mappingInputChoice);
         header.Children.Add(_mappingOutputChoice);
+        if (perInputOnly)
+        {
+            _mappingOutputChoice.Visibility = Visibility.Collapsed;
+            Grid.SetColumnSpan(_mappingInputChoice, 2);
+        }
         DynamicModulePageContent.Children.Add(header);
+        if (perInputOnly)
+            DynamicModulePageContent.Children.Add(new TextBlock
+            {
+                Text = "按实际输入手柄分别保存映射；切换 USB 输出身份时复用该手柄的配置。",
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 12)
+            });
         _mappingRouteHost = new StackPanel { Spacing = 16 };
         DynamicModulePageContent.Children.Add(_mappingRouteHost);
         _mappingInputChoice.SelectionChanged += async (_, _) => await SelectRouteAsync();
@@ -61,7 +77,8 @@ public sealed partial class MainWindow
             var page = _module.Pages.FirstOrDefault(candidate =>
                 candidate.Sections.SelectMany(section => section.Controls).Any(control =>
                     control.Type == BridgeModuleControlType.MappingEditor &&
-                    control.MappingProfile == _mappingInput && control.MappingOutput == _mappingOutput));
+                    control.MappingProfile == _mappingInput &&
+                    (perInputOnly ? control.MappingOutput is null : control.MappingOutput == _mappingOutput)));
             if (page is null)
             {
                 _dynamicPageRenderer.SuspendCapture();

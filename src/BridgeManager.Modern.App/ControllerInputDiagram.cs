@@ -20,7 +20,6 @@ internal sealed class ControllerInputDiagram : Canvas
     private readonly Dictionary<int, Control> _controls = [];
     private readonly TranslateTransform _leftMotion = new();
     private readonly TranslateTransform _rightMotion = new();
-    private readonly Brush _accent = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 47, 128, 237));
     internal uint PressedButtons { get; private set; }
     internal double LeftTriggerLevel { get; private set; }
     internal double RightTriggerLevel { get; private set; }
@@ -38,41 +37,34 @@ internal sealed class ControllerInputDiagram : Canvas
         AutomationProperties.SetAccessibilityView(this, AccessibilityView.Raw);
         var ns = profile == "ns2pro";
         var xbox = profile == "xbox";
-        var anchors = ControllerArtwork.Anchors(profile);
+        var anchors = ControllerInputGeometry.Anchors(profile);
 
-        // Keep mapping-page artwork and its anchor contract untouched. This
-        // separate view is optimized for legible, live input at desktop sizes.
-        ShapePath(ns || xbox ?
-            "M 158,87 C 199,71 253,79 282,81 L 358,81 C 387,79 441,71 482,87 " +
-            "C 523,101 536,143 545,190 C 557,254 577,343 561,383 " +
-            "Q 552,407 530,405 C 505,403 487,361 469,323 Q 460,303 441,303 " +
-            "L 199,303 Q 180,303 171,323 C 153,361 135,403 110,405 " +
-            "Q 88,407 79,383 C 63,343 83,254 95,190 C 104,143 117,101 158,87 Z" :
-            "M 145,90 C 182,76 219,82 243,86 Q 320,73 397,86 C 421,82 458,76 495,90 " +
-            "C 529,102 545,155 560,210 C 578,275 589,351 575,389 Q 566,412 545,407 " +
-            "C 521,402 499,351 480,313 Q 471,294 451,290 Q 320,321 189,290 " +
-            "Q 169,294 160,313 C 141,351 119,402 95,407 Q 74,412 65,389 " +
-            "C 51,351 62,275 80,210 C 95,155 111,102 145,90 Z", surface: true);
+        var shell = ShapePath(ControllerInputGeometry.Shell(profile), surface: true);
+        shell.StrokeThickness = 2;
+        ShapePath(ControllerInputGeometry.Seams(profile));
 
         if (!ns && !xbox)
         {
-            // Faceplate seams and touchpad are outlines, not a dark center slab.
-            ShapePath("M 228,86 C 241,121 240,164 231,191 Q 218,217 189,241 " +
-                "C 150,278 128,347 100,400 M 412,86 C 399,121 400,164 409,191 " +
-                "Q 422,217 451,241 C 490,278 512,347 540,400");
-            AddButton(17, "M 246,96 Q 320,85 394,96 Q 403,98 401,110 L 391,170 " +
-                "Q 388,188 373,189 L 267,189 Q 252,188 249,170 L 239,110 Q 237,98 246,96 Z");
-            AddButton(18, RectanglePath(307, 273, 26, 10, 5));
-            Label(new Point(320, 297), "MIC", 8);
+            AddButton(17, ControllerInputGeometry.Touchpad);
+            AddButton(18, RectanglePath(307, 293, 26, 9, 4));
+            // Quiet speaker slots establish scale without decorative textures.
+            for (var i = 0; i < 5; i++)
+                ShapePath(RectanglePath(304 + i * 7, 235, 3, 2, 1));
         }
 
         var faceKeys = new[] { "south", "east", "west", "north" };
         var faceLabels = ns ? new[] { "B", "A", "Y", "X" }
             : xbox ? new[] { "A", "B", "X", "Y" } : new[] { "×", "○", "□", "△" };
         for (var bit = 0; bit < 4; bit++)
-            AddButton(bit, CirclePath(anchors[faceKeys[bit]], 19), anchors[faceKeys[bit]], faceLabels[bit], 24);
+        {
+            var center = anchors[faceKeys[bit]];
+            AddButton(bit, CirclePath(center, 19), center, ns || xbox ? faceLabels[bit] : null, 20);
+            if (!ns && !xbox) FaceSymbol(bit, center);
+        }
 
-        var dpad = ns || xbox ? new Point(244, 240) : new Point(167, 171);
+        var dpad = anchors["dpad"];
+        if (xbox) ShapePath(CirclePath(dpad, 45), surface: true);
+        if (ns) ShapePath(FormattableString.Invariant($"M {dpad.X-14},{dpad.Y-43} H {dpad.X+14} V {dpad.Y-14} H {dpad.X+43} V {dpad.Y+14} H {dpad.X+14} V {dpad.Y+43} H {dpad.X-14} V {dpad.Y+14} H {dpad.X-43} V {dpad.Y-14} H {dpad.X-14} Z"), surface: true);
         foreach (var (bit, angle, key, glyph) in new[]
         {
             (4, 0d, "dpad_up", "▲"), (5, 180d, "dpad_down", "▼"),
@@ -90,28 +82,38 @@ internal sealed class ControllerInputDiagram : Canvas
                 };
                 return FormattableString.Invariant($"{p.X},{p.Y}");
             }
-            var data = $"M {P(-12,-39)} Q {P(0,-43)} {P(12,-39)} L {P(13,-23)} L {P(0,-10)} L {P(-13,-23)} Z";
+            var data = $"M {P(-14,-41)} Q {P(0,-45)} {P(14,-41)} L {P(14,-23)} L {P(0,-9)} L {P(-14,-23)} Z";
             AddButton(bit, data, anchors[key], glyph, 9);
         }
-        AddButton(8, RectanglePath(anchors["left_shoulder"].X - 36, 87, 72, 22, 7),
-            anchors["left_shoulder"], ns ? "L" : xbox ? "LB" : "L1", 11);
-        AddButton(9, RectanglePath(anchors["right_shoulder"].X - 36, 87, 72, 22, 7),
-            anchors["right_shoulder"], ns ? "R" : xbox ? "RB" : "R1", 11);
+        AddButton(8, ShoulderPath(anchors["left_shoulder"]),
+            anchors["left_shoulder"], ns ? "L" : xbox ? "LB" : "L1", 14);
+        AddButton(9, ShoulderPath(anchors["right_shoulder"]),
+            anchors["right_shoulder"], ns ? "R" : xbox ? "RB" : "R1", 14);
         Trigger(10, anchors["left_trigger"], ns ? "ZL" : xbox ? "LT" : "L2");
         Trigger(11, anchors["right_trigger"], ns ? "ZR" : xbox ? "RT" : "R2");
-        Small(12, anchors["back"], ns || xbox ? "−" : "⋮");
-        Small(13, anchors["start"], ns ? "+" : "≡");
-        AddButton(16, CirclePath(anchors["guide"], 14), anchors["guide"], ns ? "⌂" : xbox ? "X" : "PS", 11);
+        if (ns || xbox)
+        {
+            AddButton(12, CirclePath(anchors["back"], 11), anchors["back"], ns ? "−" : "▣", 14);
+            AddButton(13, CirclePath(anchors["start"], 11), anchors["start"], ns ? "+" : "≡", 14);
+        }
+        else
+        {
+            Small(12, anchors["back"], "⋮");
+            Small(13, anchors["start"], "≡");
+        }
+        AddButton(16, CirclePath(anchors["guide"], 14), anchors["guide"], ns ? "⌂" : xbox ? "X" : "PS", 13);
         Stick(14, anchors["left_stick"], _leftMotion);
         Stick(15, anchors["right_stick"], _rightMotion);
         if (ns)
         {
-            Small(19, anchors["capture"], "●");
-            Small(24, anchors["c"], "C");
+            var capture = anchors["capture"];
+            AddButton(19, RectanglePath(capture.X - 10, capture.Y - 10, 20, 20, 4), capture, "●", 13);
+            AddButton(24, CirclePath(anchors["c"], 12), anchors["c"], "C", 14);
             // Rear buttons are identified as a separate strip, not falsely
             // placed on the front shell at the stick/face-button coordinates.
-            AddButton(20, RectanglePath(218, 416, 46, 20, 6), new Point(241, 426), "GL", 10);
-            AddButton(21, RectanglePath(376, 416, 46, 20, 6), new Point(399, 426), "GR", 10);
+            Label(new Point(320, 424), "背键", 14);
+            AddButton(20, RectanglePath(218, 412, 46, 24, 4), new Point(241, 424), "GL", 14);
+            AddButton(21, RectanglePath(376, 412, 46, 24, 4), new Point(399, 424), "GR", 14);
         }
         else if (profile == "dse")
         {
@@ -163,8 +165,11 @@ internal sealed class ControllerInputDiagram : Canvas
 
     private static void Move(TranslateTransform motion, int x, int y)
     {
-        motion.X = Math.Clamp(x / 32768d, -1, 1) * 22;
-        motion.Y = -Math.Clamp(y / 32768d, -1, 1) * 22;
+        var dx = Math.Clamp(x / 32768d, -1, 1);
+        var dy = -Math.Clamp(y / 32768d, -1, 1);
+        var length = Math.Max(1, Math.Sqrt(dx * dx + dy * dy));
+        motion.X = dx / length * 18;
+        motion.Y = dy / length * 18;
     }
 
     private void Small(int bit, Point p, string text) =>
@@ -173,7 +178,7 @@ internal sealed class ControllerInputDiagram : Canvas
     private void Trigger(int bit, Point p, string text)
     {
         var data = FormattableString.Invariant($"M {p.X-35},{p.Y+18} L {p.X-32},{p.Y-9} Q {p.X-28},{p.Y-25} {p.X-9},{p.Y-24} L {p.X+13},{p.Y-22} Q {p.X+33},{p.Y-19} {p.X+35},{p.Y+18} Z");
-        AddButton(bit, data, p, text, 12);
+        AddButton(bit, data, p, text, 14);
         var bounds = new Rect(p.X - 37, p.Y - 26, 74, 46);
         var clip = new RectangleGeometry { Rect = bounds };
         _controls[bit].Highlight.Clip = clip;
@@ -182,17 +187,37 @@ internal sealed class ControllerInputDiagram : Canvas
 
     private void Stick(int bit, Point p, TranslateTransform motion)
     {
-        ShapePath(CirclePath(p, 40), surface: true);
+        ShapePath(CirclePath(p, 45), surface: true);
+        ShapePath(FormattableString.Invariant($"M {p.X-4},{p.Y} H {p.X+4} M {p.X},{p.Y-4} V {p.Y+4}"));
         var thumb = new Canvas { Width = Width, Height = Height, RenderTransform = motion };
-        var baseCap = ShapePath(CirclePath(p, 29), surface: true);
+        var baseCap = ShapePath(CirclePath(p, 27), surface: true);
         Children.Remove(baseCap);
         thumb.Children.Add(baseCap);
-        var highlight = ShapePath(CirclePath(p, 29), highlight: true);
+        var highlight = ShapePath(CirclePath(p, 27), highlight: true);
         Children.Remove(highlight);
         thumb.Children.Add(highlight);
         Children.Add(thumb);
         _controls[bit] = new Control(highlight, null);
     }
+
+    private void FaceSymbol(int bit, Point p)
+    {
+        var data = bit switch
+        {
+            0 => FormattableString.Invariant($"M {p.X-8},{p.Y-8} L {p.X+8},{p.Y+8} M {p.X+8},{p.Y-8} L {p.X-8},{p.Y+8}"),
+            1 => CirclePath(p, 10),
+            2 => RectanglePath(p.X - 9, p.Y - 9, 18, 18, 0),
+            _ => FormattableString.Invariant($"M {p.X},{p.Y-11} L {p.X+11},{p.Y+8} L {p.X-11},{p.Y+8} Z")
+        };
+        ShapePath(data).StrokeThickness = 2.2;
+        var active = ShapePath(data, highlight: true, onAccent: true);
+        active.Fill = null;
+        active.StrokeThickness = 2.2;
+        _controls[bit] = _controls[bit] with { Label = active };
+    }
+
+    private static string ShoulderPath(Point p) => FormattableString.Invariant(
+        $"M {p.X-39},{p.Y+9} Q {p.X-40},{p.Y-4} {p.X-28},{p.Y-8} Q {p.X},{p.Y-17} {p.X+30},{p.Y-8} Q {p.X+41},{p.Y-3} {p.X+39},{p.Y+9} Z");
 
     private void AddButton(int bit, string data, Point? center = null, string? text = null,
         double size = 12)
@@ -208,14 +233,17 @@ internal sealed class ControllerInputDiagram : Canvas
         _controls[bit] = new Control(active, activeLabel);
     }
 
-    private XamlPath ShapePath(string data, bool surface = false, bool highlight = false)
+    private XamlPath ShapePath(string data, bool surface = false, bool highlight = false, bool onAccent = false)
     {
         // Only trusted, locally generated geometry reaches XamlReader. Theme
         // expressions remain attached to neutral shapes across theme switches.
         var shape = (XamlPath)XamlReader.Load(
             "<Path xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' " +
-            "Stroke='{ThemeResource BridgeSecondaryTextBrush}' StrokeThickness='1.6' " +
-            (surface ? "Fill='{ThemeResource BridgeSurfaceBrush}' " : "") + "Data='" + data + "'/>");
+            (onAccent ? "Stroke='{ThemeResource TextOnAccentFillColorPrimaryBrush}' " :
+                highlight ? "Stroke='{ThemeResource AccentFillColorDefaultBrush}' Fill='{ThemeResource AccentFillColorDefaultBrush}' "
+                : "Stroke='{ThemeResource BridgeSecondaryTextBrush}' " +
+                  (surface ? "Fill='{ThemeResource BridgeSurfaceBrush}' " : "")) +
+            "StrokeThickness='1.6' Data='" + data + "'/>");
         shape.Width = Width;
         shape.Height = Height;
         shape.Stretch = Stretch.None;
@@ -223,8 +251,6 @@ internal sealed class ControllerInputDiagram : Canvas
         shape.StrokeStartLineCap = shape.StrokeEndLineCap = PenLineCap.Round;
         if (highlight)
         {
-            shape.Fill = _accent;
-            shape.Stroke = _accent;
             shape.Opacity = 0;
         }
         Children.Add(shape);
@@ -235,7 +261,7 @@ internal sealed class ControllerInputDiagram : Canvas
     {
         var label = (TextBlock)XamlReader.Load(
             "<TextBlock xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' " +
-            "Foreground='{ThemeResource BridgeSecondaryTextBrush}'/>");
+            "Foreground='{ThemeResource " + (active ? "TextOnAccentFillColorPrimaryBrush" : "BridgeSecondaryTextBrush") + "}'/>");
         label.Text = text;
         label.FontSize = size;
         label.FontFamily = new FontFamily("Segoe UI");
@@ -244,7 +270,6 @@ internal sealed class ControllerInputDiagram : Canvas
         label.Height = size + 10;
         if (active)
         {
-            label.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255));
             label.Opacity = 0;
         }
         Canvas.SetLeft(label, p.X - 32);
