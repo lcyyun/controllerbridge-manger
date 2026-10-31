@@ -5,7 +5,8 @@ public enum FirmwareFlashMethod
     None,
     PicoUf2,
     SifliSerial,
-    BouffaloUart
+    BouffaloUart,
+    EspressifSerial
 }
 
 public sealed record BridgeBoardDefinition(

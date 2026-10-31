@@ -19,11 +19,12 @@ public sealed record FirmwareArtifactDetails(
     bool Available, string Message, int FileCount = 0,
     long TotalBytes = 0, string? MainSha256 = null, DateTime? FileTimeUtc = null);
 
-public sealed class FirmwareFlashService
+public sealed partial class FirmwareFlashService
 {
     private readonly Func<string?> _sifliTool;
     private readonly Func<string?> _bouffaloTool;
     private readonly Func<string[]> _serialPorts;
+    private readonly Func<string?> _espressifTool;
 
     public FirmwareFlashService() : this(() => ResolveSifliTool(),
         SerialPort.GetPortNames, () => ResolveBouffaloTool()) { }
@@ -33,10 +34,15 @@ public sealed class FirmwareFlashService
 
     internal FirmwareFlashService(Func<string?> sifliTool,
         Func<string[]> serialPorts, Func<string?> bouffaloTool)
+        : this(sifliTool, serialPorts, bouffaloTool, () => ResolveEspressifTool()) { }
+
+    internal FirmwareFlashService(Func<string?> sifliTool,
+        Func<string[]> serialPorts, Func<string?> bouffaloTool, Func<string?> espressifTool)
     {
         _sifliTool = sifliTool;
         _serialPorts = serialPorts;
         _bouffaloTool = bouffaloTool;
+        _espressifTool = espressifTool;
     }
 
     public static FirmwareArtifactDetails DescribeArtifact(
@@ -66,6 +72,13 @@ public sealed class FirmwareFlashService
                 var bundle = ReadBouffaloBundle(artifact);
                 files = bundle.Files.Select(file => file.Path).ToArray();
                 main = bundle.Files.Single(file => file.Kind == "firmware").Path;
+            }
+            else if (firmware.FlashMethod == FirmwareFlashMethod.EspressifSerial)
+            {
+                var bundle = Esp32S3FlashBundle.Read(artifact);
+                bundle.ValidateFirmware(firmware);
+                files = bundle.Files.Select(file => file.Path).ToArray();
+                main = bundle.Files.Single(file => file.Kind == "application").Path;
             }
             using var input = File.OpenRead(main);
             return new(true, "已内置固件", files.Length,
@@ -126,6 +139,7 @@ public sealed class FirmwareFlashService
             FirmwareFlashMethod.PicoUf2 => CheckPico(artifact),
             FirmwareFlashMethod.SifliSerial => CheckSifli(artifact, serialPort),
             FirmwareFlashMethod.BouffaloUart => CheckBouffalo(artifact, serialPort),
+            FirmwareFlashMethod.EspressifSerial => CheckEspressif(artifact, firmware, serialPort),
             _ => new(false, "该固件模块没有提供自动烧录方式。", artifact, null)
         };
     }
@@ -151,6 +165,8 @@ public sealed class FirmwareFlashService
                 check.ArtifactPath, serialPort!, progress, cancellationToken),
             FirmwareFlashMethod.BouffaloUart => await FlashBouffaloAsync(
                 check.ArtifactPath, serialPort!, progress, cancellationToken),
+            FirmwareFlashMethod.EspressifSerial => await FlashEspressifAsync(
+                check.ArtifactPath, firmware, serialPort!, progress, cancellationToken),
             _ => new(false, "该固件模块没有提供自动烧录方式。")
         };
     }
@@ -250,6 +266,9 @@ public sealed class FirmwareFlashService
                 break;
             case FirmwareFlashMethod.BouffaloUart:
                 _ = ReadBouffaloBundle(artifact);
+                break;
+            case FirmwareFlashMethod.EspressifSerial:
+                _ = Esp32S3FlashBundle.Read(artifact);
                 break;
         }
     }
@@ -408,13 +427,13 @@ public sealed class FirmwareFlashService
         if (drives.Count == 0)
         {
             return new(false,
-                "未发现 RPI-RP2。按住 BOOTSEL 接入 Pico 2 W 后重新检查。",
+                "未发现 RP2350 启动盘。按住 BOOTSEL 接入真正的 Pico 2 W 接收器后重新检查。",
                 artifact, null);
         }
         if (drives.Count > 1)
         {
             return new(false,
-                "发现多个 RPI-RP2 盘。请只保留一块待烧录 Pico。",
+                "发现多个 RP2350 启动盘。请只保留一块待烧录的 Pico 2 W 接收器。",
                 artifact, null);
         }
         return new(true,
@@ -555,42 +574,36 @@ public sealed class FirmwareFlashService
         {
             try
             {
-                if (drive.IsReady && string.Equals(drive.VolumeLabel, "RPI-RP2",
-                                                    StringComparison.OrdinalIgnoreCase))
+                if (!drive.IsReady) continue;
+                var infoPath = Path.Combine(drive.RootDirectory.FullName, "INFO_UF2.TXT");
+                if (File.Exists(infoPath) && new FileInfo(infoPath).Length <= 4096 &&
+                    IsPico2BootVolume(drive.VolumeLabel, File.ReadAllText(infoPath)))
                 {
                     matches.Add(drive);
                 }
             }
-            catch (IOException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
             }
         }
         return matches;
     }
 
+    internal static bool IsPico2BootVolume(string label, string info)
+    {
+        // RP2350's ROM uses RP2350 as the volume label. A label alone is not
+        // proof of the chip: an RP2040 RPI-RP2 volume must never be selected.
+        if (!label.Equals("RP2350", StringComparison.OrdinalIgnoreCase) &&
+            !label.Equals("RPI-RP2", StringComparison.OrdinalIgnoreCase)) return false;
+        var boards = info.Split('\n').Select(line => line.Trim())
+            .Where(line => line.StartsWith("Board-ID:", StringComparison.OrdinalIgnoreCase))
+            .Select(line => line[9..].Trim()).ToArray();
+        return boards.Length == 1 && boards[0].Equals("RP2350", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static void ValidateUf2(string artifact)
     {
-        var data = File.ReadAllBytes(artifact);
-        if (data.Length == 0 || data.Length % 512 != 0)
-        {
-            throw new InvalidDataException("文件长度不是完整的 512 字节 UF2 块。");
-        }
-        for (var offset = 0; offset < data.Length; offset += 512)
-        {
-            var block = data.AsSpan(offset, 512);
-            if (BinaryPrimitives.ReadUInt32LittleEndian(block) != 0x0A324655 ||
-                BinaryPrimitives.ReadUInt32LittleEndian(block[4..]) != 0x9E5D5157 ||
-                BinaryPrimitives.ReadUInt32LittleEndian(block[508..]) != 0x0AB16F30)
-            {
-                throw new InvalidDataException($"第 {offset / 512 + 1} 块标记错误。");
-            }
-        }
-        var family = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(28));
-        if (family is not (0xE48BFF57 or 0xE48BFF59 or 0xE48BFF5A))
-        {
-            throw new InvalidDataException(
-                $"UF2 family 0x{family:X8} 不是 Pico 2 W / RP2350。");
-        }
+        PicoUf2Validator.Validate(artifact);
     }
 
     private static (string Chip, string Memory) ValidateSifliTarget(

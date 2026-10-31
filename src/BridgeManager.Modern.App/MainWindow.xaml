@@ -514,11 +514,11 @@
                                     <ComboBox x:Name="FirmwareImageBox" Header="固件镜像" DisplayMemberPath="DisplayName" HorizontalAlignment="Stretch" SelectionChanged="FirmwareImageBox_SelectionChanged" />
                                     <TextBlock x:Name="FirmwareArtifactText" Text="请选择目标板卡" TextWrapping="Wrap" />
                                     <Button x:Name="FirmwareUsbOtaButton" Content="通过 USB 更新 BL616" Click="FirmwareUsbOta_Click" IsEnabled="False" HorizontalAlignment="Left" Style="{StaticResource BridgePrimaryButtonStyle}" />
-                                    <TextBlock Text="写入前验证固件签名、硬件型号与版本。请保持 USB 连接。" Style="{StaticResource QuietCaptionStyle}" />
+                                    <TextBlock x:Name="FirmwareUsbOtaHint" Text="写入前验证固件签名、硬件型号与版本。请保持 USB 连接。" Style="{StaticResource QuietCaptionStyle}" />
                                     <Expander x:Name="FirmwareRomExpander" Header="首次安装或恢复：下载口烧录" Style="{StaticResource BridgeSectionExpanderStyle}">
                                     <StackPanel Spacing="12">
-                                    <TextBlock Text="用于尚不支持 OTA 的 BL616，以及 SF32LB52。先进入板卡下载模式，再选择原生下载端口；不需要 RP2350。" Style="{StaticResource QuietCaptionStyle}" />
-                                    <Grid ColumnSpacing="8">
+                                    <TextBlock x:Name="FirmwareRecoveryHint" Text="选择板卡与固件后检查对应的烧录方式。" Style="{StaticResource QuietCaptionStyle}" />
+                                    <Grid x:Name="FirmwarePortPanel" ColumnSpacing="8">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                         <ComboBox x:Name="FirmwarePortBox" Header="下载串口" DisplayMemberPath="DisplayName" HorizontalAlignment="Stretch" PlaceholderText="选择下载串口" SelectionChanged="FirmwarePortBox_SelectionChanged" />
                                         <Button x:Name="FirmwareRefreshPortsButton" Grid.Column="1" VerticalAlignment="Bottom" Click="FirmwareRefreshPorts_Click" Style="{StaticResource IconButtonStyle}" ToolTipService.ToolTip="刷新串口"><SymbolIcon Symbol="Refresh" /></Button>

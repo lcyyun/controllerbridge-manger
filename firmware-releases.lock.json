@@ -2,42 +2,68 @@
   "schemaVersion": 1,
   "modules": [
     {
+      "moduleId": "bl616-unified",
+      "repository": "lcyyun/controllerbridge-manger",
+      "tag": "v0.3.6-preview.1",
+      "asset": "bl616-unified-0.2.3-preview.1.cbmodule",
+      "sourceCommit": "6b3471761ea95f8200ab15c6b49239feb0206311",
+      "size": 1159957,
+      "sha256": "5010fe8e846bdf04374685a301b38ce46b0e4c83f4a02dcc11a914ba5ef636e9",
+      "moduleVersion": "0.2.3-preview.1",
+      "runtimeApiVersion": 2,
+      "boards": [
+        "bl616-devkit"
+      ],
+      "bundled": true
+    },
+    {
       "moduleId": "sf32-unified",
       "repository": "lcyyun/controllerbridge-SF32LB52",
-      "tag": "v0.7.0-dev.1",
-      "asset": "sf32-unified-0.7.0-dev.cbmodule",
-      "sourceCommit": "c6008ec683d8f4e09e2f8ef832ec21f088fc7fb6",
-      "size": 734694,
-      "sha256": "294fd6f4de6326c72cdec1aca29394039e80b208611a5218878c0604ddb624af",
-      "moduleVersion": "0.7.0-dev",
+      "tag": "v0.8.0-preview.1",
+      "asset": "sf32-unified-0.8.0-preview.1.cbmodule",
+      "sourceCommit": "62fbf8e5d1b40ea11bdd824401b1d259ca6c9ea3",
+      "size": 737052,
+      "sha256": "46ea7d2bceca7eb2a483f90d2f615e05ae3759a2f0b83f1f9cb387a18e3941e4",
+      "moduleVersion": "0.8.0-preview.1",
       "runtimeApiVersion": 2,
-      "boards": ["sf32lb52-devkit-nano"],
+      "boards": [
+        "sf32lb52-devkit-nano"
+      ],
       "bundled": true
     },
     {
       "moduleId": "pico-unified-bridge",
       "repository": "lcyyun/controllerbridge-pico2w",
-      "tag": "v0.1.0-bootstrap.1",
-      "asset": "pico-unified-bridge-0.1.0.cbmodule",
-      "sourceCommit": "7bf1bd8ecc1c7ac0d3653a66bfbf61f692226c21",
-      "size": 652838,
-      "sha256": "ff3da380ddaf2b1aa8ba84912476c17129fd9dba6c7bc0f8369fed5e47c4f4bb",
-      "moduleVersion": "0.1.0",
-      "runtimeApiVersion": 1,
-      "boards": ["pico-2-w"],
+      "tag": "v0.2.0-preview.1",
+      "asset": "pico-unified-bridge-0.2.0-preview.1.cbmodule",
+      "sourceCommit": "fe6bf09affcd85f674f5a2ad6b18ed230bdf5aa4",
+      "size": 680375,
+      "sha256": "760fb1838794d46ecbbdca482dd4884d53d52d4749b454a59335904f4112afb1",
+      "moduleVersion": "0.2.0-preview.1",
+      "runtimeApiVersion": 2,
+      "boards": [
+        "pico-2-w"
+      ],
       "bundled": true
     },
     {
       "moduleId": "esp32s3-ns2-bridge",
       "repository": "lcyyun/controllerbridge-esp32s3",
-      "tag": "v0.1.0-bootstrap.1",
-      "asset": "esp32s3-ns2-bridge-0.1.0-dev.cbmodule",
-      "sourceCommit": "a9329db8f4bf4e7618bcf9d394d41ae792ee52a6",
-      "size": 8603,
-      "sha256": "8b282f8d85012c009603ae0077ab212f884daf278f3ea5fcb8c1822678d54ed9",
-      "moduleVersion": "0.1.0-dev",
-      "runtimeApiVersion": 1,
-      "boards": ["esp32s3-n16r8"],
+      "tag": "v0.2.0-preview.1",
+      "asset": "esp32s3-ns2-bridge-0.2.0-preview.1.cbmodule",
+      "sourceCommit": "ff95ce9488e7bbb5763b64d2af81577cde22737a",
+      "size": 2706774,
+      "sha256": "9f157d7934a7d3ede7e95620093cea8fb2b56a4f4346a80706adcf1e0d129d39",
+      "moduleVersion": "0.2.0-preview.1",
+      "runtimeApiVersion": 2,
+      "boards": [
+        "esp32s3-n16r8",
+        "esp32s3-n4",
+        "esp32s3-n8",
+        "esp32s3-n8r2",
+        "esp32s3-n8r8",
+        "esp32s3-esp32supermini"
+      ],
       "bundled": true
     }
   ]

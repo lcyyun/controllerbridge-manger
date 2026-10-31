@@ -2,43 +2,117 @@
   "schemaVersion": 1,
   "runtimeApiVersion": 2,
   "id": "sf32-unified",
-  "moduleVersion": "0.7.0-dev",
+  "moduleVersion": "0.8.0-preview.1",
   "displayName": "SF32 Unified Bridge",
   "boardFamily": "SiFli SF32LB52",
   "description": "SF32LB52 上统一接收 DualSense 与 Nintendo NS2Pro。",
   "priority": 100,
   "capabilities": "DeviceStatus, LiveInput, UsbRoleSelection, InputSourceSelection, WirelessControllers, Rumble, UsbAudio, Motion, Settings, SelfTest, RawCommands, FirmwareFlashing",
   "matchAny": [
-    { "profileKeys": ["sf32lb52-xbox360"] },
-    { "profileKeys": ["dualsense"], "serialNumbers": ["DualSense HID"] },
-    { "profileKeys": ["ns2pro-nintendo"], "serialNumbers": ["HA2F83JI"] },
-    { "platformContains": ["SF32LB52"] }
+    {
+      "profileKeys": [
+        "sf32lb52-xbox360"
+      ]
+    },
+    {
+      "profileKeys": [
+        "dualsense"
+      ],
+      "serialNumbers": [
+        "DualSense HID"
+      ]
+    },
+    {
+      "profileKeys": [
+        "dualsense-edge"
+      ],
+      "serialNumbers": [
+        "DualSense Edge HID"
+      ]
+    },
+    {
+      "profileKeys": [
+        "ns2pro-nintendo"
+      ],
+      "serialNumbers": [
+        "HA2F83JI"
+      ]
+    },
+    {
+      "platformContains": [
+        "SF32LB52"
+      ]
+    }
   ],
   "hidDevices": [
     {
-      "key": "sf32lb52-xbox360", "displayName": "SF32LB52 Xbox 360 Manager",
-      "vendorId": 1118, "productId": 654,
-      "managerUsagePage": 65280, "managerUsageId": 1,
-      "managerFeatureReportId": 127, "usbRole": "Xbox",
-      "tags": ["sf32lb52", "xbox360", "xinput"], "supportsInputReports": false
+      "key": "sf32lb52-xbox360",
+      "displayName": "SF32LB52 Xbox 360 Manager",
+      "vendorId": 1118,
+      "productId": 654,
+      "managerUsagePage": 65280,
+      "managerUsageId": 1,
+      "managerFeatureReportId": 127,
+      "usbRole": "Xbox",
+      "tags": [
+        "sf32lb52",
+        "xbox360",
+        "xinput"
+      ],
+      "supportsInputReports": false
     },
     {
-      "key": "dualsense", "displayName": "DualSense Manager",
-      "vendorId": 1356, "productId": 3302,
-      "managerUsagePage": 1, "managerUsageId": 5,
-      "managerFeatureReportId": 246, "usbRole": "DualSense",
+      "key": "dualsense",
+      "displayName": "DualSense Manager",
+      "vendorId": 1356,
+      "productId": 3302,
+      "managerUsagePage": 1,
+      "managerUsageId": 5,
+      "managerFeatureReportId": 246,
+      "usbRole": "DualSense",
       "managerSerialNumber": "DualSense HID",
       "legacyManagerProductName": "DualSense HID",
-      "tags": ["sf32lb52", "ds5", "dualsense"],
+      "tags": [
+        "sf32lb52",
+        "ds5",
+        "dualsense"
+      ],
       "supportsInputReports": true
     },
     {
-      "key": "ns2pro-nintendo", "displayName": "SF32LB52 NS2Pro HID Manager",
-      "vendorId": 1406, "productId": 8297,
-      "managerUsagePage": 65280, "managerUsageId": 1,
-      "managerFeatureReportId": 127, "commandOutputReportId": 2,
-      "usbRole": "NintendoNs2Pro", "managerSerialNumber": "HA2F83JI",
-      "tags": ["sf32lb52", "ns2pro"], "supportsInputReports": true
+      "key": "dualsense-edge",
+      "displayName": "DualSense Edge Manager",
+      "vendorId": 1356,
+      "productId": 3570,
+      "managerUsagePage": 1,
+      "managerUsageId": 5,
+      "managerFeatureReportId": 246,
+      "usbRole": "DualSenseEdge",
+      "managerSerialNumber": "DualSense Edge HID",
+      "legacyManagerProductName": "DualSense Edge HID",
+      "tags": [
+        "sf32lb52",
+        "dse",
+        "dualsense-edge"
+      ],
+      "supportsInputReports": true
+    },
+    {
+      "key": "ns2pro-nintendo",
+      "displayName": "SF32LB52 NS2Pro HID Manager",
+      "vendorId": 1406,
+      "productId": 8297,
+      "managerUsagePage": 65280,
+      "managerUsageId": 1,
+      "managerFeatureReportId": 127,
+      "commandOutputReportId": 2,
+      "usbRole": "NintendoNs2Pro",
+      "managerSerialNumber": "HA2F83JI",
+      "tags": [
+        "sf32lb52",
+        "ns2pro"
+      ],
+      "supportsInputReports": true
     }
   ],
   "boards": [
@@ -46,35 +120,73 @@
       "id": "sf32lb52-devkit-nano",
       "displayName": "SF32LB52-DevKit-Nano",
       "family": "SF32LB52",
-      "description": "当前实测开发板，USB 设备口配合板载下载串口。"
+      "description": "SF32LB52-DevKit-Nano / sf32lb52-nano_n16r16；板载下载串口与原生 USB 设备口分离，本测试镜像待实机回归。"
     }
   ],
   "firmware": [
     {
       "id": "sf32-unified-current",
       "displayName": "SF32 Unified Bridge",
-      "version": "0.7.0-dev",
+      "version": "0.8.0-preview.1",
       "description": "DS5 Classic、NS2Pro BLE、震动与 USB Audio。",
-      "boardIds": ["sf32lb52-devkit-nano"],
+      "boardIds": [
+        "sf32lb52-devkit-nano"
+      ],
       "flashMethod": "SifliSerial",
       "artifactRelativePath": "artifacts/sftool_param.json",
       "flashHint": "使用板载下载串口和 sftool 烧录；完成后重新插拔 USB 设备口。"
     }
   ],
   "usbRoles": [
-    { "role": "Xbox", "displayName": "Xbox 360", "description": "XInput 身份", "command": "role set xbox" },
-    { "role": "DualSense", "displayName": "DualSense", "description": "音频、震动与触觉", "command": "role set ds5" },
-    { "role": "NintendoNs2Pro", "displayName": "Nintendo NS2Pro", "description": "原生 Nintendo 身份", "command": "role set ns2pro" }
+    {
+      "role": "Xbox",
+      "displayName": "Xbox 360",
+      "description": "XInput 身份",
+      "command": "role set xbox"
+    },
+    {
+      "role": "DualSense",
+      "displayName": "DualSense",
+      "description": "音频、震动与触觉",
+      "command": "role set ds5"
+    },
+    {
+      "role": "DualSenseEdge",
+      "displayName": "DualSense Edge",
+      "description": "Edge HID、音频、震动与触觉；共享 DualSense 输出映射",
+      "command": "role set dse"
+    },
+    {
+      "role": "NintendoNs2Pro",
+      "displayName": "Nintendo NS2Pro",
+      "description": "原生 Nintendo 身份",
+      "command": "role set ns2pro"
+    }
   ],
   "inputSources": [
-    { "preference": "Auto", "displayName": "自动选择", "description": "优先使用已连接控制器", "command": "input set auto" },
-    { "preference": "DualSense", "displayName": "仅使用 DualSense", "description": "Bluetooth Classic HID", "command": "input set ds5" },
-    { "preference": "NintendoNs2Pro", "displayName": "仅使用 NS2Pro", "description": "Bluetooth LE GATT", "command": "input set ns2pro" }
+    {
+      "preference": "Auto",
+      "displayName": "自动选择",
+      "description": "优先使用已连接控制器",
+      "command": "input set auto"
+    },
+    {
+      "preference": "DualSense",
+      "displayName": "仅使用 DualSense",
+      "description": "Bluetooth Classic HID",
+      "command": "input set ds5"
+    },
+    {
+      "preference": "NintendoNs2Pro",
+      "displayName": "仅使用 NS2Pro",
+      "description": "Bluetooth LE GATT",
+      "command": "input set ns2pro"
+    }
   ],
   "wirelessControllers": [
     {
       "id": "ds5",
-      "displayName": "DualSense / DS5",
+      "displayName": "DualSense / DualSense Edge",
       "transportLabel": "Bluetooth Classic",
       "pairCommand": "pair ds5",
       "connectCommand": "connect ds5",
@@ -91,8 +203,21 @@
       "forgetCommand": "forget ns2"
     }
   ],
-  "statusCommands": ["bridge status", "usb status", "settings", "rumble"],
-  "selfTestCommands": ["bridge status", "usb status", "settings", "rumble", "bridge input", "motion status", "ns2 status"],
+  "statusCommands": [
+    "bridge status",
+    "usb status",
+    "settings",
+    "rumble"
+  ],
+  "selfTestCommands": [
+    "bridge status",
+    "usb status",
+    "settings",
+    "rumble",
+    "bridge input",
+    "motion status",
+    "ns2 status"
+  ],
   "primaryStatusCommand": "bridge status",
   "inputStatusCommand": "bridge input",
   "saveSettingsCommand": "settings save",
@@ -283,33 +408,55 @@
       "id": "ps-xbox-mapping",
       "label": "DualSense → Xbox",
       "icon": "GameController",
-      "sections": [{
-        "id": "ps-xbox-layout",
-        "label": "目标按键 ← 来源按键",
-        "controls": [{
-          "id": "ps-xbox-button-map", "type": "MappingEditor",
-          "label": "DualSense → Xbox", "mappingProfile": "ds5", "mappingOutput": "xbox",
-          "binding": "/entries", "sourceCatalog": "controller.inputControls",
-          "targetCatalog": "bridge.outputControls", "readAction": "mapping.read",
-          "applyAction": "mapping.set", "resetAction": "mapping.reset", "saveAction": "mapping.save"
-        }]
-      }]
+      "sections": [
+        {
+          "id": "ps-xbox-layout",
+          "label": "目标按键 ← 来源按键",
+          "controls": [
+            {
+              "id": "ps-xbox-button-map",
+              "type": "MappingEditor",
+              "label": "DualSense → Xbox",
+              "mappingProfile": "ds5",
+              "mappingOutput": "xbox",
+              "binding": "/entries",
+              "sourceCatalog": "controller.inputControls",
+              "targetCatalog": "bridge.outputControls",
+              "readAction": "mapping.read",
+              "applyAction": "mapping.set",
+              "resetAction": "mapping.reset",
+              "saveAction": "mapping.save"
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "ns-xbox-mapping",
       "label": "NS2Pro → Xbox",
       "icon": "GameController",
-      "sections": [{
-        "id": "ns-xbox-layout",
-        "label": "目标按键 ← 来源按键",
-        "controls": [{
-          "id": "ns-xbox-button-map", "type": "MappingEditor",
-          "label": "NS2Pro → Xbox", "mappingProfile": "ns2pro", "mappingOutput": "xbox",
-          "binding": "/entries", "sourceCatalog": "controller.inputControls",
-          "targetCatalog": "bridge.outputControls", "readAction": "mapping.read",
-          "applyAction": "mapping.set", "resetAction": "mapping.reset", "saveAction": "mapping.save"
-        }]
-      }]
+      "sections": [
+        {
+          "id": "ns-xbox-layout",
+          "label": "目标按键 ← 来源按键",
+          "controls": [
+            {
+              "id": "ns-xbox-button-map",
+              "type": "MappingEditor",
+              "label": "NS2Pro → Xbox",
+              "mappingProfile": "ns2pro",
+              "mappingOutput": "xbox",
+              "binding": "/entries",
+              "sourceCatalog": "controller.inputControls",
+              "targetCatalog": "bridge.outputControls",
+              "readAction": "mapping.read",
+              "applyAction": "mapping.set",
+              "resetAction": "mapping.reset",
+              "saveAction": "mapping.save"
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "ns-mapping",

@@ -9,6 +9,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot 'verify-espressif-assets.ps1')
 
 function Get-ContainedFile {
     param([string]$BasePath, [string]$RelativePath, [switch]$AllowEmpty)
@@ -48,6 +49,7 @@ $requiredFiles = @(
     'Microsoft.WindowsAppRuntime.Bootstrap.dll',
     'PACKAGE-INFO.txt',
     'NOTICE.md',
+    'RELEASE-TESTING.md',
     'LICENSES\HidSharp-Apache-2.0.txt',
     'LICENSE',
     'firmware-releases.lock.json',
@@ -65,13 +67,15 @@ $requiredFiles = @(
     'modules\sf32-unified\artifacts\output\main.bin',
     'modules\sf32-unified\artifacts\ftab.bin',
     'modules\pico-unified-bridge\module.json',
-    'modules\pico-unified-bridge\artifacts\pico-controller-bridge-0.1.uf2',
     'tools\sftool\sftool.exe',
     'tools\sftool\LICENSE.txt',
     'tools\sftool\PROVENANCE.json',
     'tools\blflash\BLFlashCommand.exe',
     'tools\blflash\LICENSE.txt',
     'tools\blflash\PROVENANCE.json',
+    'tools\esptool\esptool.exe',
+    'tools\esptool\LICENSE.txt',
+    'tools\esptool\PROVENANCE.json',
     'SHA256SUMS.txt'
 )
 foreach ($file in $requiredFiles) {
@@ -94,7 +98,7 @@ if (Test-Path -LiteralPath $localPath) {
         (Get-FileHash -LiteralPath $asset).Hash -ine $local.sha256) {
         throw 'Local SF32 archive does not match its recorded digest.'
     }
-    foreach ($id in @('esp32s3-ns2-bridge', 'pico-unified-bridge')) {
+    foreach ($id in @('bl616-unified', 'esp32s3-ns2-bridge', 'pico-unified-bridge')) {
         [void]@(& (Join-Path $PSScriptRoot 'get-firmware-packages.ps1') `
             -LockPath (Join-Path $root 'firmware-releases.lock.json') `
             -SourceDirectory (Join-Path $root 'module-packages') -ModuleId $id -Offline)
@@ -123,7 +127,7 @@ foreach ($filePin in @($pin.executable, $pin.license)) {
 
 $expectedMethods = @{
     'bl616-unified' = 'BouffaloUart'
-    'esp32s3-ns2-bridge' = 'None'
+    'esp32s3-ns2-bridge' = 'EspressifSerial'
     'sf32-unified' = 'SifliSerial'
     'pico-unified-bridge' = 'PicoUf2'
 }
@@ -159,6 +163,9 @@ foreach ($moduleId in @('bl616-unified', 'esp32s3-ns2-bridge', 'sf32-unified', '
     $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($manifest.id -ne $moduleId -or @($manifest.firmware).Count -eq 0) {
         throw "Invalid bundled firmware manifest: $moduleId"
+    }
+    if ($moduleId -ceq 'esp32s3-ns2-bridge') {
+        Assert-EspressifModuleBoards $manifest
     }
     $artifactFiles = [Collections.Generic.List[string]]::new()
     $artifactFiles.Add($manifestPath)
@@ -198,6 +205,16 @@ foreach ($moduleId in @('bl616-unified', 'esp32s3-ns2-bridge', 'sf32-unified', '
             foreach ($flashFile in $blBundle.files) {
                 $artifactFiles.Add((Get-ContainedFile -BasePath $blArtifactRoot -RelativePath ([string]$flashFile.path)))
             }
+            $mainImage = @($blBundle.files | Where-Object kind -CEQ 'firmware')
+            if ($mainImage.Count -ne 1) { throw 'BL616 requires one firmware image.' }
+            foreach ($suffix in @('.ota', '.ota.manifest')) {
+                $artifactFiles.Add((Get-ContainedFile -BasePath $blArtifactRoot `
+                    -RelativePath ($mainImage[0].path + $suffix)))
+            }
+        } elseif ($firmware.flashMethod -eq 'EspressifSerial') {
+            foreach ($flashFile in @(Get-EspressifBundleFiles -ManifestPath $artifactPath -BoardIds $firmware.boardIds)) {
+                $artifactFiles.Add($flashFile)
+            }
         } elseif ([IO.Path]::GetExtension($artifactPath) -ne '.uf2') {
             throw "Pico firmware must reference a UF2: $artifactPath"
         }
@@ -217,24 +234,8 @@ foreach ($moduleId in @('bl616-unified', 'esp32s3-ns2-bridge', 'sf32-unified', '
             }
         }
         # Validate archive payloads against the expanded defaults, including parameters.
-        foreach ($artifactFile in $artifactFiles) {
-            $relative = $artifactFile.Substring($moduleRoot.Length + 1).Replace('\', '/')
-            $entries = @($archive.Entries | Where-Object { $_.FullName -ceq $relative })
-            if ($entries.Count -ne 1 -or $entries[0].Length -eq 0) {
-                throw "Module package $moduleId is missing or duplicates firmware file $relative"
-            }
-            $stream = $entries[0].Open()
-            $sha = [Security.Cryptography.SHA256]::Create()
-            try {
-                $archiveHash = [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-', '')
-            } finally {
-                $stream.Dispose()
-                $sha.Dispose()
-            }
-            if ($archiveHash -ne (Get-FileHash -LiteralPath $artifactFile -Algorithm SHA256).Hash) {
-                throw "Module package $moduleId differs from bundled firmware file $relative"
-            }
-        }
+        Assert-PackagedArtifactMatchesArchive -Archive $archive -ModuleRoot $moduleRoot `
+            -ArtifactFiles $artifactFiles -ModuleId $moduleId
     } finally {
         $archive.Dispose()
     }
@@ -307,6 +308,15 @@ try {
     if (Test-Path -LiteralPath $probeRoot) { Remove-Item -LiteralPath $probeRoot -Recurse -Force }
 }
 Write-Host "Verified bundled BLFlashCommand $($blPin.version) (BL616-only, $($blPin.license.spdx))."
+
+$espPinPath = Join-Path $PSScriptRoot 'vendor/esptool/PROVENANCE.json'
+$espToolRoot = Join-Path $root 'tools/esptool'
+Assert-PinnedEspressifTool -ToolRoot $espToolRoot -PinPath $espPinPath
+$espVersion = (& (Join-Path $espToolRoot 'esptool.exe') version | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or $espVersion -notmatch '(?m)^4\.8\.1\s*$') {
+    throw "Pinned esptool version check failed: $espVersion"
+}
+Write-Host 'Verified bundled esptool 4.8.1 (windows-x64, GPL-2.0-or-later); no port was opened.'
 
 if ($LaunchSmoke) {
     $process = Start-Process `

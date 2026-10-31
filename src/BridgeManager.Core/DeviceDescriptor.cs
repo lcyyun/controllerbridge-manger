@@ -18,6 +18,7 @@ public sealed record DeviceDescriptor(
     byte ManagerFeatureReportId = ManagerProtocol.FeatureReportId,
     byte? CommandOutputReportId = null)
 {
+    public BridgeManagerWireProtocol ManagerWireProtocol { get; init; }
     public string TransportLabel => DiagnosticOnly
         ? $"串口诊断：{Id}（无 USB 实时输入）"
         : $"USB HID：{VendorId:x4}:{ProductId:x4} · {UsbRole.DisplayName()}";

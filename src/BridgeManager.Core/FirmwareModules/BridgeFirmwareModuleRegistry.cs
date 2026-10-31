@@ -66,7 +66,8 @@ public sealed class BridgeFirmwareModuleRegistry
         {
             ProfileKey = verified.Key, Platform = verified.DisplayName,
             UsbRole = verified.UsbRole, ManagerFeatureReportId = verified.ManagerFeatureReportId,
-            CommandOutputReportId = verified.CommandOutputReportId
+            CommandOutputReportId = verified.CommandOutputReportId,
+            ManagerWireProtocol = verified.ManagerWireProtocol
         };
     }
 

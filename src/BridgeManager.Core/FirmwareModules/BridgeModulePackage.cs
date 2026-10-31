@@ -62,12 +62,14 @@ public sealed class BridgeHidDeviceDefinition
     public string? LegacyManagerProductName { get; init; }
     public string[] Tags { get; init; } = [];
     public bool SupportsInputReports { get; init; }
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public BridgeManagerWireProtocol ManagerWireProtocol { get; init; }
 
     public BridgeDeviceProfile ToProfile() => new(
         Key, DisplayName, VendorId, ProductId, ManagerUsagePage, ManagerUsageId,
         ManagerFeatureReportId, CommandOutputReportId, UsbRole,
         ManagerSerialNumber, LegacyManagerProductName, Tags)
-        { SupportsInputReports = SupportsInputReports };
+        { SupportsInputReports = SupportsInputReports, ManagerWireProtocol = ManagerWireProtocol };
 }
 
 public sealed record BridgeModuleLoadIssue(string Path, string Message);
@@ -303,6 +305,15 @@ public static class BridgeModulePackageLoader
                 "Module manifest collections must not be null.");
         }
         BridgeDynamicModuleValidator.Validate(definition);
+        foreach (var device in definition.HidDevices)
+        {
+            if (!Enum.IsDefined(device.ManagerWireProtocol) ||
+                device.ManagerWireProtocol == BridgeManagerWireProtocol.Nsm1 &&
+                (device.ManagerFeatureReportId != 0x7e || device.CommandOutputReportId is not null ||
+                 device.ManagerUsagePage != 0xff00 || device.ManagerUsageId != 1 ||
+                 device.SupportsInputReports))
+                throw new InvalidDataException("NSM1 requires feature report 0x7e on the vendor command HID collection.");
+        }
     }
 }
 

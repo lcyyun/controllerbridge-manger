@@ -2,6 +2,9 @@ using BridgeManager.Core;
 using BridgeManager.Core.FirmwareModules;
 using BridgeManager.Core.Protocol;
 using BridgeManager.Core.Transports;
+using System.Buffers.Binary;
+using System.Text;
+using System.Text.Json;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Graphics;
@@ -15,6 +18,7 @@ public sealed partial class MainWindow
         SmokeCapture.Require(!_discoverDevices, "Shell smoke must not discover/open real devices.");
         Title = "Controller Bridge UI Test - offline fixtures";
         _inputWatchdog.Stop();
+        _managerInputTimer.Stop();
         var moduleDirectories = GetModuleDirectories().ToArray();
         SmokeCapture.Require(moduleDirectories.Length is >= 1 and <= 2 &&
             moduleDirectories[0] == Path.Combine(AppContext.BaseDirectory, "modules") &&
@@ -226,10 +230,13 @@ public sealed partial class MainWindow
         _localInputActive = false;
         TestFirmwareUpdateControls();
         TestReenumeratedModuleControls();
+        TestPendingUsbRoleSwitch();
+        await TestEspManagerContractsAsync(root, output);
         await TestLiveControllerDiagramAsync(root, output);
+        await TestPhysicalInputFallbackAsync(root, output);
         await CaptureConnectedDashboardAsync(root, output);
         await File.WriteAllTextAsync(Path.Combine(output, "shell-result.txt"),
-            "PASS offline input navigation, local input without receiver, source isolation, wide/narrow/light/dark page rendering, OTA button busy/install/error/disconnect recovery, connected dashboard and shared device selection, footer actions without branding, live controller buttons/sticks/analog triggers/release/stale reset");
+            "PASS offline input navigation, local input without receiver, source isolation, wide/narrow/light/dark page rendering, OTA button busy/install/error/disconnect recovery, pending USB role ACK target preservation, ESP reset completion/error/deadline/reboot/generation isolation, ESP stop preserves feedback configuration, nullable audio state and role-aware audio selftest, module-specific tuning ranges, connected dashboard and shared device selection, footer actions without branding, live controller buttons/sticks/analog triggers/release/stale reset, XInput physical input fallback, duplicate snapshot expiry and USB timeout clearing");
         AppWindow.Resize(new SizeInt32(1360, 940));
         root.RequestedTheme = ElementTheme.Light;
         OpenCreateReceiver();
@@ -327,6 +334,71 @@ public sealed partial class MainWindow
         }
     }
 
+    private async Task TestPhysicalInputFallbackAsync(FrameworkElement root, string output)
+    {
+        SmokeCapture.Require(_client is null && _transport is null, "Physical input fixture must be offline.");
+        var previousDescriptor = _lastDescriptor;
+        _sourceTelemetry.Reset();
+        try
+        {
+            _transport = new FirmwareControlsSmokeTransport();
+            _client = new ManagerCommandClient(_transport);
+            _lastDescriptor = _transport.Descriptor with { UsbRole = BridgeUsbRole.Xbox };
+            _status = new BridgeStatusSnapshot();
+            MainNavigation.SelectedItem = InputNavItem;
+            await Task.Delay(60);
+            var snapshot = System.Text.Json.JsonSerializer.SerializeToElement(new {
+                profile = "bridge_input", source = "ns2pro", valid = true, stale = false, snapshot_ok = true,
+                buttons = (1u << 24) | 1u, left_x = 16384, left_y = -16384, right_x = 0, right_y = 0,
+                left_trigger = 32768, right_trigger = 0, motion_valid = false,
+                timestamp_valid = true, sensor_timestamp = 1u, battery_valid = false, battery_percent = 100
+            });
+            UpdateSummary(snapshot);
+            var diagram = _controllerInputDiagram!;
+            SmokeCapture.Require(diagram.IsHighlighted(24) && diagram.IsHighlighted(0) &&
+                Math.Abs(diagram.LeftTriggerLevel - 0.5) < 0.001 && BatteryText.Text == "电量：未知" &&
+                InputRateText.Text.Contains("管理快照刷新") && ActualReportRateText.Text == "—",
+                "XInput management snapshot did not paint physical extended buttons/axes or invented telemetry.");
+            await SmokeCapture.SaveAsync(root, output, "physical-input-xinput.png");
+            _lastManagerInputAt = DateTimeOffset.UtcNow - TimeSpan.FromSeconds(3);
+            UpdateSummary(snapshot);
+            CheckReceiverInputFreshness();
+            SmokeCapture.Require(diagram.PressedButtons == 0 && diagram.LeftTriggerLevel == 0 && ButtonsText.Text == "无",
+                "Repeated physical snapshot extended stale input highlights.");
+
+            _transport = new FirmwareControlsSmokeTransport(inputReports: true);
+            _client = new ManagerCommandClient(_transport);
+            _lastUsbInputAt = DateTimeOffset.UtcNow - TimeSpan.FromSeconds(3);
+            var pressed = new ControllerInputSnapshot("NS2 USB input", 1, 10000, 0, 0, 0, 65535, 0,
+                0, 0, 0, 0, 0, 0, false, 100);
+            UpdateInputDisplay(pressed);
+            CheckReceiverInputFreshness();
+            SmokeCapture.Require(_controllerInputDiagram!.PressedButtons == 0 && LeftTriggerBar.Value == 0,
+                "USB timeout kept receiver buttons or analog triggers pressed.");
+            _localInputActive = true;
+            UpdateInputDisplay(pressed, local: true);
+            CheckReceiverInputFreshness();
+            SmokeCapture.Require(_controllerInputDiagram.PressedButtons != 0,
+                "Receiver timeout cleared the independently selected local controller.");
+            _localInputActive = false;
+            await CloseTransportAsync(clearSummary: false);
+            SmokeCapture.Require(_controllerInputDiagram.PressedButtons == 0 && LeftTriggerBar.Value == 0,
+                "Reconnect teardown retained the previous receiver state.");
+        }
+        finally
+        {
+            _localInputActive = false;
+            _client = null;
+            _transport = null;
+            _lastDescriptor = previousDescriptor;
+            _status = new BridgeStatusSnapshot();
+            _sourceTelemetry.Reset();
+            _lastManagerInput = null;
+            _lastManagerInputAt = _lastUsbInputAt = null;
+            ClearInputTest("物理输入离线验证结束");
+        }
+    }
+
     private void TestReenumeratedModuleControls()
     {
         var previousModule = _module;
@@ -350,6 +422,48 @@ public sealed partial class MainWindow
             }
         }
         finally { ActivateModule(previousModule); }
+    }
+
+    private void TestPendingUsbRoleSwitch()
+    {
+        var previousStatus = _status;
+        var previousExpected = _expectedRole;
+        try
+        {
+            foreach (var oldRole in BridgeRoles.UsbRoles)
+            foreach (var requested in BridgeRoles.UsbRoles.Where(role => role != oldRole))
+            {
+                _status = new BridgeStatusSnapshot { UsbRole = oldRole };
+                _expectedRole = requested;
+                _roleSwitchInProgress = true;
+                // Actual ESP role-set ACK reports the current and pending modes;
+                // an already queued status command can then report the old role.
+                UpdateSummary(System.Text.Json.JsonSerializer.SerializeToElement(new {
+                    ok = true, profile = "settings", output_mode = oldRole.CommandValue(),
+                    pending_output_mode = requested.CommandValue()
+                }));
+                UpdateSummary(System.Text.Json.JsonSerializer.SerializeToElement(new {
+                    ok = true, role = oldRole.CommandValue()
+                }));
+                var previous = new FirmwareControlsSmokeTransport().Descriptor with { UsbRole = oldRole };
+                var next = previous with { Id = "offline-new-role", UsbRole = requested };
+                SmokeCapture.Require(_expectedRole == requested &&
+                    DeviceReconnectSelector.Select([previous, next], previous, _expectedRole) == next,
+                    "A deferred ACK or old status changed the requested USB reconnect target.");
+                _roleSwitchInProgress = false;
+                UpdateSummary(System.Text.Json.JsonSerializer.SerializeToElement(new {
+                    ok = true, role = requested.CommandValue()
+                }));
+                SmokeCapture.Require(_expectedRole == requested && _status.UsbRole == requested,
+                    "Verified post-switch status was not adopted.");
+            }
+        }
+        finally
+        {
+            _roleSwitchInProgress = false;
+            _status = previousStatus;
+            _expectedRole = previousExpected;
+        }
     }
 
     private async Task CaptureConnectedDashboardAsync(FrameworkElement root, string output)
@@ -388,7 +502,7 @@ public sealed partial class MainWindow
                 InputPreferenceText.Visibility == Visibility.Collapsed &&
                 !FirmwareRomExpander.IsExpanded && FirmwareUsbOtaButton.IsEnabled,
                 "Connected dashboard did not simplify its connection or update actions.");
-            _receiverBattery = 100; // DS5 persona's placeholder for an NS2 input.
+            // USB-personality battery is never a physical source reading.
             UpdateHomeTelemetry();
             SmokeCapture.Require(ActualReportRateText.Text == "—" && HomeBatteryText.Text == "—",
                 "Legacy USB target rate or emulated battery was presented as real telemetry.");
@@ -500,6 +614,22 @@ public sealed partial class MainWindow
                 !FirmwareCheckUpdatesButton.IsEnabled,
                 "Package completion re-enabled actions during flashing.");
             SetFirmwareBusy(false);
+            foreach (var (moduleId, method) in new[] {
+                ("sf32-unified", FirmwareFlashMethod.SifliSerial),
+                ("pico-unified-bridge", FirmwareFlashMethod.PicoUf2),
+                ("esp32s3-ns2-bridge", FirmwareFlashMethod.EspressifSerial) })
+            {
+                _module = _moduleRegistry.Find(moduleId)!;
+                RefreshFirmwareTargets();
+                SmokeCapture.Require(FirmwareBoardBox.Items.Count > 0 &&
+                    _firmwareSelection?.Module.Id == moduleId &&
+                    _firmwareSelection.Firmware.FlashMethod == method &&
+                    FirmwareCheckUpdatesButton.IsEnabled &&
+                    FirmwareUsbOtaButton.Visibility == Visibility.Collapsed &&
+                    FirmwarePortPanel.Visibility == (method == FirmwareFlashMethod.PicoUf2
+                        ? Visibility.Collapsed : Visibility.Visible),
+                    $"Firmware update/recovery controls excluded or confused {moduleId}.");
+            }
             SetFirmwareUpdateBusy(true);
             _client = null;
             SetFirmwareUpdateBusy(false);
@@ -517,10 +647,273 @@ public sealed partial class MainWindow
         }
     }
 
-    private sealed class FirmwareControlsSmokeTransport : IDeviceTransport
+    private async Task TestEspManagerContractsAsync(FrameworkElement root, string output)
+    {
+        SmokeCapture.Require(!_discoverDevices && _client is null && _transport is null,
+            "ESP contract tests must be entirely offline.");
+        var previousModule = _module;
+        var previousStatus = _status;
+        var previousExpected = _expectedRole;
+        var previousDescriptor = _lastDescriptor;
+        var previousReconnect = _autoReconnectEnabled;
+        var esp = _moduleRegistry.Find("esp32s3-ns2-bridge")!;
+        EspContractSmokeTransport UseTransport(Func<string, string> reply,
+            BridgeUsbRole role = BridgeUsbRole.DualSense, bool? enabled = null)
+        {
+            var transport = new EspContractSmokeTransport(reply, role);
+            _transport = transport;
+            _client = new ManagerCommandClient(transport);
+            _lastDescriptor = transport.Descriptor;
+            _status = new BridgeStatusSnapshot { UsbRole = role, RumbleEnabled = enabled };
+            _expectedRole = role;
+            return transport;
+        }
+        try
+        {
+            _autoReconnectEnabled = false;
+            ActivateModule(esp);
+            SmokeCapture.Require(ScaleBox.Minimum == 0 && ScaleBox.Maximum == 100 &&
+                HoldBox.Maximum == 2000 && TickBox.Minimum == 4 && StopsBox.Maximum == 10,
+                "ESP settings allow values outside the actual firmware limits.");
+            foreach (var id in new[] { "bl616-unified", "sf32-unified", "pico-unified-bridge" })
+            {
+                ActivateModule(_moduleRegistry.Find(id)!);
+                SmokeCapture.Require(ScaleBox.Minimum == 5 && ScaleBox.Maximum == 250 &&
+                    HoldBox.Maximum == 3000 && TickBox.Minimum == 5 && StopsBox.Maximum == 12,
+                    $"ESP tuning limits leaked into {id}.");
+            }
+            ActivateModule(esp);
+            _status = new BridgeStatusSnapshot();
+            UpdateSummary(JsonSerializer.SerializeToElement(new {
+                ok = true, role = "dualsense", audio_out_packets = 99, audio_in_packets = 0,
+                audio_mic_open = false, audio_haptic_blocks = 7, audio_ns2_updates = 6,
+                audio_ns2_stops = 1, audio_ns2_mixed_ticks = 20
+            }));
+            SmokeCapture.Require(AudioStatusText.Text.Contains("扬声器未知") &&
+                AudioStatusText.Text.Contains("麦克风未打开") && AudioStatusText.Text.Contains("（未知）"),
+                "Absent ESP audio booleans were rendered as false or inferred from cumulative counters.");
+            MainNavigation.SelectedItem = FeedbackNavItem;
+            await SmokeCapture.SaveAsync(root, output, "esp-audio-unknown.png");
+            foreach (var role in BridgeRoles.UsbRoles)
+            {
+                UseTransport(_ => JsonSerializer.Serialize(new {
+                    ok = true, role = role.CommandValue(), audio_out_packets = 0, audio_in_packets = 0,
+                    audio_haptic_blocks = 0, audio_ns2_updates = 0, audio_ns2_stops = 0, audio_ns2_mixed_ticks = 0
+                }), role);
+                await RunSelfTestAsync();
+                _pollTimer.Stop();
+                var sony = role is BridgeUsbRole.DualSense or BridgeUsbRole.DualSenseEdge;
+                SmokeCapture.Require(TestResultBox.Text.Contains("DS5 UAC 诊断字段") == sony &&
+                    TestResultBox.Text.Contains("播放声音后音频 OUT 计数增长") == sony,
+                    $"Audio selftest guidance does not match {role} USB capability.");
+            }
+            foreach (var (original, configured, stopEnabled, expected) in new[]
+            {
+                ((bool?)true, true, false, "rumble stop,rumble on"),
+                ((bool?)false, false, false, "rumble stop"),
+                ((bool?)null, true, false, "rumble config,rumble stop,rumble on"),
+                ((bool?)null, false, false, "rumble config,rumble stop"),
+                ((bool?)true, true, true, "rumble stop")
+            })
+            {
+                var transport = UseTransport(command => JsonSerializer.Serialize(new {
+                    ok = true, rumble_enabled = command == "rumble config" ? configured :
+                        command == "rumble on" || stopEnabled
+                }), enabled: original);
+                await SendModuleRumbleAsync("stop");
+                SmokeCapture.Require(string.Join(",", transport.Commands) == expected &&
+                    _status.RumbleEnabled == (original ?? configured),
+                    "Stopping ESP rumble changed the original feedback setting or sent an unnecessary enable.");
+            }
+            var rejectedStop = UseTransport(_ => "{\"ok\":false,\"rumble_enabled\":false}", enabled: true);
+            await SendModuleRumbleAsync("stop");
+            SmokeCapture.Require(rejectedStop.Commands.SequenceEqual(["rumble stop"]),
+                "Rejected ESP stop must not issue rumble on.");
+
+            foreach (var role in BridgeRoles.UsbRoles)
+            {
+                var polls = 0;
+                var transport = UseTransport(command => command == "settings reset"
+                    ? "{\"ok\":true,\"reset_pending\":true}"
+                    : JsonSerializer.Serialize(new { ok = true, reset_pending = ++polls < 2,
+                        reset_error = 0, role = role.CommandValue() }), role);
+                var recovered = false;
+                var result = await ResetEspSettingsAsync("settings reset", previous =>
+                {
+                    var next = previous with { Id = "offline-reset-nintendo", UsbRole = BridgeUsbRole.NintendoNs2Pro };
+                    SmokeCapture.Require(polls == 2 && _roleSwitchInProgress &&
+                        _expectedRole == BridgeUsbRole.NintendoNs2Pro &&
+                        DeviceReconnectSelector.Select([next], previous, _expectedRole) == next,
+                        "Reset recovered before completion or lost its Nintendo target to an old status.");
+                    recovered = true;
+                    return Task.FromResult(true);
+                }, pollDelay: TimeSpan.FromMilliseconds(1));
+                SmokeCapture.Require(recovered && result.GetProperty("reconnected").GetBoolean() &&
+                    !_roleSwitchInProgress && transport.Commands.SequenceEqual([
+                        "settings reset", "settings status", "settings status", "settings status"]),
+                    "ESP reset did not wait for completion exactly once before recovery.");
+            }
+            foreach (var failure in new[] { "rejected", "firmware-error", "missing-fields", "command-timeout", "deadline", "generation", "generation-between-polls" })
+            {
+                var failureTransport = UseTransport(command =>
+                {
+                    if (command == "settings reset")
+                    {
+                        if (failure == "generation-between-polls") DispatcherQueue.TryEnqueue(() =>
+                        {
+                            Interlocked.Increment(ref _transportGeneration);
+                            _expectedRole = BridgeUsbRole.Xbox;
+                        });
+                        return failure == "rejected"
+                            ? "{\"ok\":false,\"error\":\"busy\"}"
+                            : "{\"ok\":true,\"reset_pending\":true}";
+                    }
+                    if (failure == "generation")
+                    {
+                        Interlocked.Increment(ref _transportGeneration);
+                        _expectedRole = BridgeUsbRole.Xbox;
+                    }
+                    if (failure == "command-timeout") throw new TimeoutException("Offline fixture: command timeout is not a reboot.");
+                    return failure switch
+                    {
+                        "firmware-error" => "{\"ok\":true,\"reset_pending\":false,\"reset_error\":263}",
+                        "missing-fields" => "{\"ok\":true,\"reset_pending\":false}",
+                        _ => "{\"ok\":true,\"reset_pending\":true,\"reset_error\":0}"
+                    };
+                });
+                var recovered = false;
+                Exception? error = null;
+                try
+                {
+                    await ResetEspSettingsAsync("settings reset", _ =>
+                    {
+                        recovered = true;
+                        return Task.FromResult(true);
+                    }, waitTimeout: TimeSpan.FromMilliseconds(80), pollDelay: TimeSpan.FromMilliseconds(1));
+                }
+                catch (Exception ex) { error = ex; }
+                SmokeCapture.Require(error is not null && !recovered && !_roleSwitchInProgress &&
+                    _expectedRole == (failure.StartsWith("generation", StringComparison.Ordinal) ? BridgeUsbRole.Xbox : BridgeUsbRole.DualSense) &&
+                    (failure != "generation-between-polls" || failureTransport.Commands.SequenceEqual(["settings reset"])) &&
+                    (failure != "deadline" || error is TimeoutException),
+                    $"ESP reset failure {failure} was ignored or restored/reconnected the wrong transport.");
+            }
+            var disconnect = UseTransport(command => command == "settings reset"
+                ? "{\"ok\":true,\"reset_pending\":true}"
+                : throw new IOException("Offline fixture: accepted reset detached USB."));
+            var afterDisconnect = false;
+            await ResetEspSettingsAsync("settings reset", _ =>
+            {
+                afterDisconnect = _expectedRole == BridgeUsbRole.NintendoNs2Pro && _roleSwitchInProgress;
+                UseTransport(_ => "{\"ok\":true,\"reset_pending\":false,\"reset_error\":0}", BridgeUsbRole.NintendoNs2Pro);
+                Interlocked.Increment(ref _transportGeneration);
+                return Task.FromResult(true);
+            }, pollDelay: TimeSpan.FromMilliseconds(1));
+            SmokeCapture.Require(afterDisconnect && disconnect.Commands.Count == 2,
+                "Accepted reset disconnect did not recover using the protected Nintendo target.");
+            foreach (var response in new[] {
+                "{\"ok\":true,\"reset_pending\":true,\"reset_error\":0}",
+                "{\"ok\":true,\"reset_pending\":false,\"reset_error\":263}",
+                "{\"ok\":true,\"reset_pending\":false}" })
+            {
+                UseTransport(command => command == "settings reset"
+                    ? "{\"ok\":true,\"reset_pending\":true}"
+                    : throw new IOException("Offline fixture: transient I/O while Nintendo reset pending."),
+                    BridgeUsbRole.NintendoNs2Pro);
+                var confirmed = false;
+                EspContractSmokeTransport? reopened = null;
+                try
+                {
+                    await ResetEspSettingsAsync("settings reset", _ =>
+                    {
+                        reopened = UseTransport(_ => response, BridgeUsbRole.NintendoNs2Pro);
+                        Interlocked.Increment(ref _transportGeneration);
+                        return Task.FromResult(true);
+                    }, pollDelay: TimeSpan.FromMilliseconds(1));
+                    confirmed = true;
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or InvalidDataException) { }
+                SmokeCapture.Require(!confirmed && !_roleSwitchInProgress && reopened is not null &&
+                    reopened.Commands.SequenceEqual(["settings status"]),
+                    "Reopening Nintendo after I/O claimed reset success without a valid completed settings reply.");
+            }
+            UseTransport(command => command == "settings reset"
+                ? "{\"ok\":true,\"reset_pending\":true}"
+                : "{\"ok\":true,\"reset_pending\":false,\"reset_error\":0}");
+            var recoveryFailed = false;
+            try
+            {
+                await ResetEspSettingsAsync("settings reset", _ => Task.FromResult(false),
+                    pollDelay: TimeSpan.FromMilliseconds(1));
+            }
+            catch (IOException) { recoveryFailed = true; }
+            SmokeCapture.Require(recoveryFailed && !_roleSwitchInProgress,
+                "Failed recovery after reset was incorrectly reported as successful.");
+            await File.WriteAllTextAsync(Path.Combine(output, "esp-contract-result.txt"),
+                "PASS NSM1 fake transport only: four-role reset completion, old-status target freeze, rejection/error/malformed/deadline/generation isolation, accepted-reset detach, stop enable preservation including unknown state and unchanged new firmware, unknown audio state, four-role audio selftest and tuning-limit isolation. Hardware not tested.");
+        }
+        finally
+        {
+            _pollTimer.Stop();
+            _roleSwitchInProgress = false;
+            _client = null;
+            _transport = null;
+            _lastDescriptor = previousDescriptor;
+            _status = previousStatus;
+            _expectedRole = previousExpected;
+            _autoReconnectEnabled = previousReconnect;
+            ActivateModule(previousModule);
+        }
+    }
+
+    private sealed class EspContractSmokeTransport(Func<string, string> reply, BridgeUsbRole role) : IDeviceTransport
+    {
+        private readonly List<byte> _command = [];
+        private readonly Queue<byte[]> _replies = new();
+        public List<string> Commands { get; } = [];
+        public DeviceDescriptor Descriptor { get; } = new("offline-esp", "ESP offline contract fixture",
+            0x303a, 0x4002, DeviceTransportKind.Hid, "esp32s3", true, false,
+            UsbRole: role, ManagerFeatureReportId: 0x7e) { ManagerWireProtocol = BridgeManagerWireProtocol.Nsm1 };
+        public Task OpenAsync(CancellationToken token) => throw new InvalidOperationException("No hardware in UI smoke.");
+        public Task WriteOutputReportAsync(byte id, ReadOnlyMemory<byte> payload, CancellationToken token) =>
+            throw new InvalidOperationException("NSM1 fixtures use Feature reports only.");
+        public Task WriteFeatureReportAsync(byte id, ReadOnlyMemory<byte> payload, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            SmokeCapture.Require(id == 0x7e && payload.Length == NsmFeatureProtocol.PayloadLength,
+                "ESP UI command used the wrong Feature report contract.");
+            var packet = payload.Span;
+            var offset = BinaryPrimitives.ReadUInt16LittleEndian(packet[18..]);
+            if (offset == 0) _command.Clear();
+            _command.AddRange(packet.Slice(NsmFeatureProtocol.HeaderLength, packet[20]).ToArray());
+            if ((packet[7] & 1) != 0) return Task.CompletedTask;
+            var command = Encoding.UTF8.GetString(_command.ToArray());
+            Commands.Add(command);
+            var json = reply(command);
+            _replies.Clear();
+            foreach (var chunk in NsmFeatureProtocol.BuildCommand(json, BinaryPrimitives.ReadUInt32LittleEndian(packet[8..])))
+            {
+                chunk[6] = 1;
+                var report = new byte[chunk.Length + 1];
+                report[0] = id;
+                chunk.CopyTo(report, 1);
+                _replies.Enqueue(report);
+            }
+            return Task.CompletedTask;
+        }
+        public Task<byte[]> ReadFeatureReportAsync(byte id, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            return Task.FromResult(_replies.Dequeue());
+        }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class FirmwareControlsSmokeTransport(bool inputReports = false) : IDeviceTransport
     {
         public DeviceDescriptor Descriptor { get; } = new("offline", "offline", 0x054c, 0x0ce6,
-            DeviceTransportKind.Hid, "bl616-dualsense", true, false, ManagerFeatureReportId: 0xf6);
+            DeviceTransportKind.Hid, "bl616-dualsense", true, false, SupportsInputReports: inputReports,
+            ManagerFeatureReportId: 0xf6);
         public Task OpenAsync(CancellationToken token) => throw new InvalidOperationException("No USB in UI smoke.");
         public Task WriteFeatureReportAsync(byte id, ReadOnlyMemory<byte> payload, CancellationToken token) => throw new InvalidOperationException("No USB in UI smoke.");
         public Task WriteOutputReportAsync(byte id, ReadOnlyMemory<byte> payload, CancellationToken token) => throw new InvalidOperationException("No USB in UI smoke.");

@@ -1,4 +1,5 @@
 using BridgeManager.Core;
+using BridgeManager.Core.FirmwareModules;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -12,10 +13,13 @@ public sealed partial class MainWindow
     private readonly InputReportBuffer _localFrames = new();
     private readonly DispatcherTimer _inputPaintTimer = new() { Interval = TimeSpan.FromMilliseconds(33) };
     private readonly DispatcherTimer _inputWatchdog = new() { Interval = TimeSpan.FromSeconds(1) };
+    private readonly DispatcherTimer _managerInputTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private readonly DispatcherTimer _localRumbleTimer = new() { Interval = TimeSpan.FromMilliseconds(600) };
     private bool _selectingInput;
     private bool _inputClosing;
     private bool _refreshingInput;
+    private bool _managerInputPolling;
+    private bool _managerInputFailureReported;
     private int _inputSelectionVersion;
     private long _localSamples;
     private long _rateSamples;
@@ -39,6 +43,7 @@ public sealed partial class MainWindow
         _inputWatchdog.Tick += (_, _) =>
         {
             UpdateHomeTelemetry();
+            CheckReceiverInputFreshness();
             if (!_localInputActive || _localReadError is not null) return;
             var now = DateTimeOffset.UtcNow;
             if (_lastLocalInput is null || now - _lastLocalInput > TimeSpan.FromSeconds(2))
@@ -62,6 +67,36 @@ public sealed partial class MainWindow
         InputSourceBox.SelectedIndex = 0;
         SetControllerArtwork(null);
         _inputWatchdog.Start();
+        _managerInputTimer.Tick += async (_, _) => await PollManagerInputAsync();
+        _managerInputTimer.Start();
+    }
+
+    private async Task PollManagerInputAsync()
+    {
+        if (_inputClosing || _managerInputPolling || _polling || _connecting || _reconnecting || _roleSwitchInProgress ||
+            _firmwareFlashBusy || _firmwareUpdateBusy || _setupWizardView?.IsFlashing == true ||
+            _localInputActive || _client is null || _transport?.Descriptor.SupportsInputReports != false ||
+            !_module.Capabilities.Has(BridgeCapability.LiveInput) ||
+            string.IsNullOrWhiteSpace(_module.InputStatusCommand) ||
+            (InputPage.Visibility != Visibility.Visible && DynamicModulePage.Visibility != Visibility.Visible)) return;
+        _managerInputPolling = true;
+        try
+        {
+            // The shared client's command lock owns the complete request/reply.
+            // Skipping busy ticks keeps at most one input request queued.
+            await SendCommandAsync(_module.InputStatusCommand, render: false, logCommand: false);
+            _managerInputFailureReported = false;
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            // The normal status poll owns reconnect/recovery, so this optional
+            // fast input poll must not launch another concurrent recovery.
+            if (!_managerInputFailureReported && !_inputClosing)
+                AppDiagnostics.Write("physical-input-snapshot", ex);
+            _managerInputFailureReported = true;
+        }
+        finally { _managerInputPolling = false; }
     }
 
     private async void RefreshInputSources_Click(object sender, RoutedEventArgs e) =>
@@ -177,11 +212,10 @@ public sealed partial class MainWindow
             _usbInputReports = usb.ReportCount;
             _lastUsbInputAt = usb.ReceivedAt;
             _receiverRate.Observe(usb.ReportCount, Environment.TickCount64);
-            _receiverBattery = usb.Input.BatteryPercent;
             if (!_localInputActive && InputPage.Visibility == Visibility.Visible)
                 UpdateInputDisplay(usb.Input);
             _dynamicPageRenderer.OnInputSnapshot(usb.Input,
-                _status.InputValid == true && _status.InputStale != true
+                ReceiverSourceIsFresh
                     ? _status.ActiveInput : BridgePhysicalInput.None, usb.PressedButtons);
         }
         if (_localFrames.Drain() is { } current &&
@@ -301,6 +335,7 @@ public sealed partial class MainWindow
         _inputClosing = true;
         _inputSelectionVersion++;
         _inputWatchdog.Stop();
+        _managerInputTimer.Stop();
         _inputPaintTimer.Stop();
         _localFrames.Reset();
         _usbFrames.Reset();

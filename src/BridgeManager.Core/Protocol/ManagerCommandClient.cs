@@ -9,6 +9,7 @@ public sealed class ManagerCommandClient
     private readonly IDeviceTransport _transport;
     private readonly Func<int, CancellationToken, Task> _otaRetryDelay;
     private readonly SemaphoreSlim _commandLock = new(1, 1);
+    private uint _nsmTransaction = (uint)Random.Shared.NextInt64(1, uint.MaxValue);
 
     public ManagerCommandClient(IDeviceTransport transport) : this(transport, Task.Delay)
     {
@@ -39,6 +40,8 @@ public sealed class ManagerCommandClient
         try
         {
             var descriptor = _transport.Descriptor;
+            if (descriptor.ManagerWireProtocol == BridgeManagerWireProtocol.Nsm1)
+                return await SendNsmCommandAsync(command, commandToken).ConfigureAwait(false);
             if (descriptor.CommandOutputReportId is byte outputReportId &&
                 descriptor.SupportsOutputReports)
             {
@@ -74,6 +77,45 @@ public sealed class ManagerCommandClient
         {
             _commandLock.Release();
         }
+    }
+
+    private async Task<JsonDocument> SendNsmCommandAsync(string command, CancellationToken token)
+    {
+        var transaction = unchecked(++_nsmTransaction);
+        if (transaction == 0) transaction = ++_nsmTransaction;
+        var reportId = _transport.Descriptor.ManagerFeatureReportId;
+        foreach (var packet in NsmFeatureProtocol.BuildCommand(command, transaction))
+            await _transport.WriteFeatureReportAsync(reportId, packet, token).ConfigureAwait(false);
+        var result = new byte[NsmFeatureProtocol.MaxBodyLength];
+        var received = 0;
+        var total = -1;
+        for (var attempt = 0; attempt < 150; attempt++)
+        {
+            var report = await _transport.ReadFeatureReportAsync(reportId, token).ConfigureAwait(false);
+            var chunk = NsmFeatureProtocol.ParseReply(report, reportId);
+            // A task-dispatched request may not have replaced the previous
+            // reply yet. Never accept stale or unrelated transaction data.
+            if (chunk.Transaction != transaction || chunk.Opcode != NsmFeatureProtocol.ExecuteCommand)
+            {
+                await Task.Delay(10, token).ConfigureAwait(false);
+                continue;
+            }
+            if (chunk.Status == 8 && chunk.TotalLength == 0)
+            {
+                await Task.Delay(10, token).ConfigureAwait(false);
+                continue;
+            }
+            if (chunk.Status != 0)
+                throw new ManagerCommandException($"ESP32-S3 manager rejected the request (NSM1 status {chunk.Status}).");
+            if (chunk.Offset != received || (total >= 0 && total != chunk.TotalLength))
+                throw new ManagerCommandException("NSM1 reply fragment is out of order or changed length.");
+            total = chunk.TotalLength;
+            chunk.Payload.CopyTo(result, received);
+            received += chunk.Payload.Length;
+            if (!chunk.More)
+                return JsonDocument.Parse(result.AsMemory(0, received));
+        }
+        throw new ManagerCommandException($"NSM1 reply incomplete ({received}/{total}).");
     }
 
     private async Task<string> ReadJsonReplyAsync(byte featureReportId,

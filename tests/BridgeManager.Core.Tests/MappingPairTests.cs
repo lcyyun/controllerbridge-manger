@@ -217,6 +217,19 @@ internal static class MappingPairTests
         Equal(false, BridgeButtonMapping.CanCapture(null, BridgePhysicalInput.Unknown, "", identity));
         Equal(false, BridgeButtonMapping.CanCapture("ds5", null, BridgePhysicalInput.DualSense,
             "DS5 USB input", identity));
+        foreach (var profile in Profiles)
+        foreach (var output in Outputs)
+        {
+            var input = profile == "ds5" ? BridgePhysicalInput.DualSense : BridgePhysicalInput.NintendoNs2Pro;
+            var report = profile == "ds5" ? "DS5 physical input" : "NS2Pro physical input";
+            var remapped = new Dictionary<string, string>(identity) { ["south"] = "east" };
+            Equal(true, BridgeButtonMapping.CanCapture(profile, output, input, report, remapped));
+            Equal(false, BridgeButtonMapping.CanCapture(Other(profile), output, input, report, remapped));
+            Equal(false, BridgeButtonMapping.CanCapture(profile, output, BridgePhysicalInput.None, report, remapped));
+            Equal(false, BridgeButtonMapping.CanCapture(profile, output, input, "untrusted " + report, remapped));
+            remapped.Remove("c");
+            Equal(false, BridgeButtonMapping.CanCapture(profile, output, input, report, remapped));
+        }
     }
 
     public static void Validation()
@@ -282,8 +295,24 @@ internal static class MappingPairTests
         var root = FindRepository();
         var path = Path.Combine(root, "modules", "sf32-unified", "sf32-unified.bridge-module.json");
         var module = BridgeModulePackageLoader.LoadFile(path);
-        Equal("0.7.0-dev", module.ModuleVersion);
-        Equal("0.7.0-dev", module.Firmware.Single().Version);
+        Equal(true, BridgeModuleVersion.IsValid(module.ModuleVersion));
+        Equal(module.ModuleVersion, module.Firmware.Single().Version);
+        var fallback = new Sf32UnifiedFirmwareModule();
+        Equal(4, fallback.UsbRoles.Count);
+        Equal(4, fallback.HidDevices.Select(device => device.UsbRole).Distinct().Count());
+        var fallbackControls = fallback.Pages.SelectMany(page => page.Sections)
+            .SelectMany(section => section.Controls).ToArray();
+        Equal(6, fallbackControls.Length);
+        foreach (var profile in Profiles)
+        foreach (var output in Outputs)
+        {
+            var control = fallbackControls.Single(item =>
+                item.MappingProfile == profile && item.MappingOutput == output);
+            Equal(25, Read(control, Reply(profile, output)).Count);
+            Equal($"mapping set {profile} {output} left_paddle right_function",
+                BridgeModuleOperationEngine.BuildRequest(fallback.Operations[control.ApplyAction!],
+                    BridgeButtonMapping.Parameters(control, "left_paddle", "right_function")));
+        }
         var pages = module.Pages.Where(page => page.Sections.SelectMany(section => section.Controls)
             .Any(control => control.Type == BridgeModuleControlType.MappingEditor)).ToArray();
         var expected = new[] { ("ps-mapping", "ds5", "ds5"), ("ps-ns-mapping", "ds5", "ns2pro"),

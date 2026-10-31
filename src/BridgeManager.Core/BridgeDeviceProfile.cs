@@ -1,5 +1,7 @@
 namespace BridgeManager.Core;
 
+public enum BridgeManagerWireProtocol { LegacyText, Nsm1 }
+
 public sealed record BridgeDeviceProfile(
     string Key,
     string DisplayName,
@@ -18,6 +20,7 @@ public sealed record BridgeDeviceProfile(
         VendorId == vendorId && ProductId == productId;
 
     public bool SupportsInputReports { get; init; }
+    public BridgeManagerWireProtocol ManagerWireProtocol { get; init; }
 
     public bool MatchesManagerIdentity(string? serialNumber,
                                        string? productName) =>
@@ -107,13 +110,29 @@ public static class BridgeDeviceProfiles
         0x0ce6,
         BridgeHidUsages.GenericDesktopPage,
         BridgeHidUsages.Gamepad,
-        ManagerProtocol.DualSenseFeatureReportId,
+        ManagerProtocol.FeatureReportId,
         null,
         BridgeUsbRole.DualSense,
         null,
         "Pico 2 W DualSense HID",
         new[] { "pico2w", "ds5", "dualsense" })
         { SupportsInputReports = true };
+
+    public static readonly BridgeDeviceProfile PicoDualSenseEdge = PicoDualSense with
+    {
+        Key = "pico-dualsense-edge", DisplayName = "Pico 2 W DualSense Edge Manager",
+        ProductId = 0x0df2, UsbRole = BridgeUsbRole.DualSenseEdge,
+        LegacyManagerProductName = "Pico 2 W DualSense Edge HID",
+        Tags = ["pico2w", "ds5", "dse"]
+    };
+
+    public static readonly BridgeDeviceProfile PicoXInput = PicoAutoManager with
+    {
+        Key = "pico-xinput", DisplayName = "Pico 2 W XInput Manager",
+        ProductId = 0x4013, UsbRole = BridgeUsbRole.Xbox,
+        LegacyManagerProductName = "Pico 2 W XInput Bridge", SupportsInputReports = false,
+        Tags = ["pico2w", "xinput", "development-preview"]
+    };
 
     public static readonly BridgeDeviceProfile NintendoNs2Pro = new(
         "ns2pro-nintendo",
@@ -136,6 +155,18 @@ public static class BridgeDeviceProfiles
         DisplayName = "BL616 Xbox 360 Manager",
         ManagerSerialNumber = "BL616X360",
         Tags = ["bl616", "xbox360", "xinput"]
+    };
+
+    public static readonly BridgeDeviceProfile PicoNintendoNs2Pro = NintendoNs2Pro with
+    {
+        Key = "pico-ns2pro", DisplayName = "Pico 2 W NS2Pro Manager",
+        LegacyManagerProductName = "Pico 2 W NS2Pro Bridge", Tags = ["pico2w", "ns2pro"]
+    };
+
+    public static readonly BridgeDeviceProfile PicoNintendoNs2ProLegacy = NintendoNs2Pro with
+    {
+        Key = "pico-ns2pro-legacy", DisplayName = "Pico 2 W NS2Pro Legacy Manager",
+        ManagerSerialNumber = "HA2F83JF", Tags = ["pico2w", "ns2pro"]
     };
 
     public static readonly BridgeDeviceProfile Bl616DualSense = SonyDualSense with
@@ -186,7 +217,11 @@ public static class BridgeDeviceProfiles
         SonyDualSense,
         SonyDualSenseEdge,
         PicoDualSense,
+        PicoDualSenseEdge,
+        PicoXInput,
         NintendoNs2Pro,
+        PicoNintendoNs2Pro,
+        PicoNintendoNs2ProLegacy,
         Bl616Xbox360,
         Bl616XInputPreview,
         Bl616DualSense,

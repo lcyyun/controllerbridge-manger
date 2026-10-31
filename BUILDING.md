@@ -14,10 +14,13 @@ builds and publish builds; packaging also enforces locked restore mode.
 
 ## Firmware
 
-`firmware-releases.lock.json` names exactly three reviewed firmware assets, with
+`firmware-releases.lock.json` names exactly four reviewed firmware assets, with
 repository, source commit, release tag, size and SHA-256.
-SF32 and Pico assets contain firmware. ESP32 supplies management metadata only.
-No BL616 binary is substituted.
+Every module must contain its actual firmware images. The published BL616
+0.2.3-preview.1 archive is reused byte-for-byte, including its signed OTA image.
+The other modules contain SF32 Nano n16r16 images and addresses, Pico 2 W UF2,
+and independent ESP32-S3 N4/N8/N8R2/N8R8/N16R8/ESP32SUPERMINI
+bootloader/partition/application images.
 
 ```powershell
 # Downloads missing pinned assets with an already authenticated GitHub CLI.
@@ -28,13 +31,18 @@ pwsh -File tools\package-modern-windows.ps1
 pwsh -File tools\package-modern-windows.ps1 -Offline
 
 # This directory must contain the exact locked .cbmodule bytes.
-pwsh -File tools\package-modern-windows.ps1 -ModulePackageDirectory C:\releases\modules -Offline
+pwsh -File tools\package-modern-windows.ps1 -ModulePackageDirectory C:\releases\modules -Offline `
+  -EsptoolArchive C:\releases\tools\esptool-v4.8.1-win64.zip
 ```
 
 The application release feed is `lcyyun/controllerbridge-manger`. The firmware
 wizard reads the public SF32LB52, Pico2W and ESP32S3 repository releases directly.
 App-side downloads require no GitHub login and verify the release asset size
 and SHA-256 digest. Missing digests are rejected.
+The esptool archive, executable and license are pinned in
+`tools/vendor/esptool/PROVENANCE.json`; offline packaging requires the cached
+official archive or an explicit `-EsptoolArchive`. It never substitutes a tool
+found on the system PATH.
 Manager update checks default to stable releases; preview releases require
 explicit selection. Downloading and launching an installer each require user
 confirmation. Firmware flashing blocks installer launch.
@@ -58,7 +66,7 @@ pwsh -File tools\verify-modern-package.ps1 `
 `LOCAL-PREVIEW.json` records the local override's size and digest, explicitly
 marks hardware testing as incomplete, and does not claim a published source
 commit. Verification rejects local previews without `-AllowLocalPreview`.
-The unchanged ESP32 and Pico archives must still match the release lock.
+The unchanged BL616, ESP32 and Pico archives must still match the release lock.
 
 ## Windows Installer
 
@@ -66,12 +74,13 @@ Build the verified portable package first, then use Inno Setup 6.5.4 or newer:
 
 ```powershell
 pwsh -File tools\package-installer.ps1 `
-  -PackagePath dist\BridgeManager-input-mapping-win-x64 `
-  -IsccPath 'C:\Tools\Inno Setup 6\ISCC.exe' `
-  -Version 0.2.0 -AllowLocalPreview
+  -PackagePath dist\BridgeManager-0.3.7-preview.1-win-x64 `
+  -IsccPath 'C:\Tools\Inno Setup 6\ISCC.exe'
 ```
 
-The resulting `dist\ControllerBridge-Setup-0.2.0-win-x64.exe` is a single
+The installer version is derived from the packaged application's product
+version. An explicit `-Version` must agree; mismatches fail before compilation.
+The resulting `dist\ControllerBridge-Setup-0.3.7-win-x64.exe` is a single
 download containing the app, runtime dependencies, firmware and flash tool.
 Installation is per-user and creates a Start menu shortcut; a desktop shortcut
 is optional. App settings under `%LOCALAPPDATA%\ControllerBridge` are not removed
@@ -100,6 +109,7 @@ frozen binary.
 ```powershell
 pwsh -File tools\test-firmware-packages.ps1
 pwsh -File tools\verify-modern-package.ps1 -PackagePath dist\BridgeManager-modern-win-x64
+pwsh -File tools\test-bundled-parity.ps1 -PackagePath dist\BridgeManager-modern-win-x64
 ```
 
 `BridgeManager.Modern.App.exe --shell-smoke <absolute-output-directory>` and

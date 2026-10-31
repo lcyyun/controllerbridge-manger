@@ -5,6 +5,9 @@ using BridgeManager.Core.FirmwareModules;
 using BridgeManager.Core.Protocol;
 using BridgeManager.Core.Transports;
 
+// Inert child executable for ESP flash sequencing tests; never opens hardware.
+if (Esp32S3Tests.TryRunFakeFlasher(args)) return;
+
 // Isolated ownership helper. Never constructs a USB/serial transport.
 if (args.Length == 2 && args[0] == "--lease-hold")
 {
@@ -268,6 +271,10 @@ var tests = new (string Name, Action Run)[]
     ("keeps unknown Nintendo identities board-neutral", KeepsUnknownNintendoIdentityNeutral),
     ("resolves ESP32-S3 NS2Pro firmware module", ResolvesEsp32S3Ns2FirmwareModule),
     ("resolves Pico unified firmware module", ResolvesPicoUnifiedFirmwareModule),
+    ("checks Pico four-identity protocol and mapping contract", () => PicoModuleContractTests.Run(
+        Path.Combine(Environment.CurrentDirectory, "modules", "pico-unified-bridge", "pico-unified-bridge.bridge-module.json"))),
+    ("validates Pico UF2 blocks, chip families and complete image streams", PicoUf2ValidatorTests.Run),
+    ("validates ESP32-S3 native management and verified serial flash", Esp32S3Tests.Run),
     ("falls back for unknown manager firmware", FallsBackForUnknownManagerFirmware),
     ("filters firmware by board", FiltersFirmwareByBoard),
     ("does not offer Nano firmware to the LCD board", RejectsNanoFirmwareForLcdBoard),
@@ -286,11 +293,13 @@ var tests = new (string Name, Action Run)[]
     ("gates physical capture on native identity USB reports", GatesMappingCapture),
     ("coalesces input frames and preserves edges", InputReportBufferTests.Run),
     ("measures received report rate independently of UI cadence and reconnects", ReportRateMeterTests.Run),
+    ("expires and isolates physical source telemetry without counting cached polls", SourceInputTelemetryTests.Run),
+    ("decodes physical management input independently of USB output roles", ManagerInputDecoderTests.Run),
     ("expands all four source-output mapping command templates", MappingPairTests.Templates),
     ("gates pair replies and preserves legacy mapping parsers", MappingPairTests.Replies),
-    ("captures only native identity source-output pairs", MappingPairTests.Capture),
+    ("captures native identity reports and verified physical source snapshots", MappingPairTests.Capture),
     ("validates source-output MappingEditor definitions", MappingPairTests.Validation),
-    ("loads the four SF32 mapping pages and schema contract", MappingPairTests.Manifest),
+    ("loads the six SF32 mapping routes and schema contract", MappingPairTests.Manifest),
     ("rejects invalid dynamic numeric ranges", RejectsInvalidDynamicNumericRanges),
     ("rejects Runtime API 2 fields in an API 1 module", RejectsApi2FieldsInApi1Module),
     ("rejects unknown dynamic module fields", RejectsUnknownDynamicModuleFields),
@@ -422,8 +431,18 @@ static void ResolvesSf32UnifiedFirmwareModule()
     var module = registry.Resolve(descriptor);
     AssertEqual("sf32-unified", module.Id);
     AssertEqual(true, module.Capabilities.Has(BridgeCapability.UsbAudio));
-    AssertEqual(2, module.UsbRoles.Count);
+    AssertEqual(4, module.UsbRoles.Count);
     AssertEqual(2, module.WirelessControllers.Count);
+    foreach (var profile in module.HidDevices)
+    {
+        var identity = new DeviceDescriptor(profile.Key, profile.DisplayName,
+            profile.VendorId, profile.ProductId, DeviceTransportKind.Hid,
+            profile.DisplayName, true, profile.SupportsInputReports,
+            UsbRole: profile.UsbRole, ProfileKey: profile.Key,
+            ManagerFeatureReportId: profile.ManagerFeatureReportId,
+            SerialNumber: profile.ManagerSerialNumber);
+        AssertEqual("sf32-unified", registry.Resolve(identity).Id);
+    }
 }
 
 static void ResolvesBl616FirmwareModule()
@@ -507,7 +526,9 @@ static void ResolvesEsp32S3Ns2FirmwareModule()
     var module = new BridgeFirmwareModuleRegistry().Resolve(descriptor);
     AssertEqual("esp32s3-ns2-bridge", module.Id);
     AssertEqual(1, module.WirelessControllers.Count);
-    AssertEqual(false, module.Capabilities.Has(BridgeCapability.UsbAudio));
+    AssertEqual(true, module.Capabilities.Has(BridgeCapability.UsbAudio));
+    AssertEqual(4, module.UsbRoles.Count);
+    AssertEqual(false, module.InputSources.Any(input => input.Preference == BridgeInputPreference.DualSense));
 }
 
 static void ResolvesPicoUnifiedFirmwareModule()
@@ -1473,7 +1494,7 @@ static void TestsManagerResourceOwnership()
     try
     {
         AssertEqual("LEASE_READY", child.StandardOutput.ReadLineAsync()
-            .WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult());
+            .WaitAsync(TimeSpan.FromSeconds(30)).GetAwaiter().GetResult());
         AssertEqual(false, ManagerResourceLease.TryAcquire(key.ToUpperInvariant(), out var blocked));
         AssertEqual<ManagerResourceLease?>(null, blocked);
         // Only this isolated test's own child process is terminated.

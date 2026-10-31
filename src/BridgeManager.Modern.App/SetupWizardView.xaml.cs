@@ -469,6 +469,7 @@ public sealed partial class SetupWizardView
             FirmwareFlashMethod.PicoUf2 => "Pico UF2 / BOOTSEL",
             FirmwareFlashMethod.SifliSerial => "SiFli sftool / 串口",
             FirmwareFlashMethod.BouffaloUart => "Bouffalo BLFlash / BL616 下载串口",
+            FirmwareFlashMethod.EspressifSerial => "Espressif esptool / ESP32-S3 下载串口",
             _ => "手动烧录"
         };
         WizardFlashHintText.Text = firmware.FlashHint;
@@ -483,6 +484,7 @@ public sealed partial class SetupWizardView
         {
             FirmwareFlashMethod.SifliSerial => FirmwareFlashService.ResolveSifliTool(),
             FirmwareFlashMethod.BouffaloUart => FirmwareFlashService.ResolveBouffaloTool(),
+            FirmwareFlashMethod.EspressifSerial => FirmwareFlashService.ResolveEspressifTool(),
             _ => null
         };
         var bundledTool = Path.Combine(AppContext.BaseDirectory, "tools", "sftool", "sftool.exe");
@@ -495,15 +497,17 @@ public sealed partial class SetupWizardView
             FirmwareFlashMethod.BouffaloUart => tool is null
                 ? "烧录工具：缺失 BLFlashCommand"
                 : $"烧录工具：{tool}",
+            FirmwareFlashMethod.EspressifSerial => tool is null
+                ? "烧录工具：缺少经过校验的 esptool" : "烧录工具：App 内置 esptool 4.8.1",
             _ => "当前仅支持管理，暂不提供 App 烧录"
         };
         WizardFlashButton.IsEnabled = artifact.Available &&
             firmware.FlashMethod != FirmwareFlashMethod.None &&
             (firmware.FlashMethod is not (FirmwareFlashMethod.SifliSerial or
-                 FirmwareFlashMethod.BouffaloUart) || tool is not null);
+                 FirmwareFlashMethod.BouffaloUart or FirmwareFlashMethod.EspressifSerial) || tool is not null);
         WizardPortPanel.Visibility = firmware.FlashMethod is
                                    FirmwareFlashMethod.SifliSerial or
-                                   FirmwareFlashMethod.BouffaloUart
+                                   FirmwareFlashMethod.BouffaloUart or FirmwareFlashMethod.EspressifSerial
             ? Visibility.Visible : Visibility.Collapsed;
         WizardFlashStatusText.Text = "尚未检查下载连接";
     }
@@ -663,6 +667,8 @@ public sealed partial class SetupWizardView
                     FirmwareFlashService.ResolveSifliTool() is not null,
                 FirmwareFlashMethod.BouffaloUart =>
                     FirmwareFlashService.ResolveBouffaloTool() is not null,
+                FirmwareFlashMethod.EspressifSerial =>
+                    FirmwareFlashService.ResolveEspressifTool() is not null,
                 _ => true
             });
         WizardFlashProgress.IsActive = busy;

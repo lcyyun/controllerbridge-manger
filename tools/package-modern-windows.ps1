@@ -7,6 +7,7 @@ param(
     [string]$PackageName = 'BridgeManager-modern-win-x64',
     [string]$SftoolPath = $env:BRIDGE_MANAGER_SFTOOL,
     [string]$BlFlashRoot = $env:BRIDGE_MANAGER_BLFLASH_ROOT,
+    [string]$EsptoolArchive,
     [string]$ModulePackageDirectory,
     [string]$ClassicDirectory,
     [string]$LocalSf32Module,
@@ -134,6 +135,16 @@ if ($LASTEXITCODE -ne 0) { throw 'Modern manager publish failed.' }
     -OutputDirectory $outputDir -SftoolPath $SftoolPath
 & (Join-Path $PSScriptRoot 'bundle-blflash.ps1') `
     -OutputDirectory $outputDir -FlashCubeRoot $BlFlashRoot
+$esptoolSource = $EsptoolArchive
+if ($Offline -and -not $esptoolSource) {
+    $esptoolPin = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'vendor/esptool/PROVENANCE.json') -Raw | ConvertFrom-Json
+    $esptoolSource = Join-Path $PSScriptRoot "vendor/esptool/cache/$($esptoolPin.archive.fileName)"
+    if (-not (Test-Path -LiteralPath $esptoolSource -PathType Leaf)) {
+        throw 'Pinned esptool archive is unavailable offline; supply -EsptoolArchive or populate the vendor cache.'
+    }
+}
+& (Join-Path $PSScriptRoot 'bundle-esptool.ps1') `
+    -OutputDirectory $outputDir -ArchivePath $esptoolSource
 
 $modulePackageRoot = Join-Path $outputDir 'module-packages'
 New-Item -ItemType Directory -Path $modulePackageRoot -Force | Out-Null
@@ -144,11 +155,23 @@ foreach ($moduleSource in $moduleSources) {
 foreach ($modulePackage in Get-ChildItem -LiteralPath $modulePackageRoot `
         -Filter '*.cbmodule' -File) {
     $moduleId = $modulePackage.BaseName -replace '-[0-9].*$', ''
-    $moduleRoot = Join-Path $outputDir "modules\$moduleId"
+    $moduleRoot = [IO.Path]::GetFullPath((Join-Path $outputDir "modules\$moduleId"))
+    $modulesPrefix = [IO.Path]::GetFullPath((Join-Path $outputDir 'modules')) + [IO.Path]::DirectorySeparatorChar
+    if (-not $moduleRoot.StartsWith($modulesPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Unsafe module extraction directory: $moduleRoot"
+    }
     if (-not (Test-Path -LiteralPath $moduleRoot -PathType Container)) {
         throw "Published module directory is missing: $moduleRoot"
     }
-    $extractRoot = Join-Path $modulePackageRoot ".extract-$moduleId"
+    # A previous source artifact name must not survive beside a newer locked
+    # firmware payload. The output directory is disposable, not source content.
+    Remove-Item -LiteralPath $moduleRoot -Recurse -Force
+    New-Item -ItemType Directory -Path $moduleRoot -Force | Out-Null
+    $extractRoot = [IO.Path]::GetFullPath((Join-Path $modulePackageRoot ".extract-$moduleId"))
+    $extractPrefix = [IO.Path]::GetFullPath($modulePackageRoot) + [IO.Path]::DirectorySeparatorChar
+    if (-not $extractRoot.StartsWith($extractPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Unsafe module staging directory: $extractRoot"
+    }
     if (Test-Path -LiteralPath $extractRoot) {
         Remove-Item -LiteralPath $extractRoot -Recurse -Force
     }
@@ -179,18 +202,13 @@ foreach ($modulePackage in Get-ChildItem -LiteralPath $modulePackageRoot `
     Remove-Item -LiteralPath $extractRoot -Recurse -Force
 }
 
-$blModuleRoot = Join-Path $outputDir 'modules/bl616-unified'
-foreach ($notice in @('LICENSE', 'NOTICE.md', 'LICENSES')) {
-    Copy-Item -LiteralPath (Join-Path $managerRoot "modules/bl616-unified/$notice") `
-        -Destination $blModuleRoot -Recurse -Force
-}
-$blModuleVersion = (Get-Content -LiteralPath (Join-Path $blModuleRoot 'module.json') -Raw |
-    ConvertFrom-Json).moduleVersion
-& (Join-Path $PSScriptRoot 'pack-module-directory.ps1') -SourceDirectory $blModuleRoot `
-    -OutputPath (Join-Path $modulePackageRoot "bl616-unified-$blModuleVersion.cbmodule")
+# All four modules come from immutable release locks, including the already
+# published signed BL616 package. Do not regenerate an archive for that version.
 
 Copy-Item -LiteralPath (Join-Path $managerRoot 'README.md') `
     -Destination (Join-Path $outputDir 'README.md') -Force
+Copy-Item -LiteralPath (Join-Path $managerRoot 'RELEASE-TESTING.md') `
+    -Destination (Join-Path $outputDir 'RELEASE-TESTING.md') -Force
 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'NOTICE.md') `
     -Destination (Join-Path $outputDir 'NOTICE.md') -Force
 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'LICENSES') `
@@ -216,9 +234,11 @@ $packageInfo = @(
     "Built UTC: $([DateTime]::UtcNow.ToString('u'))"
     'Primary transport: USB HID'
     'Firmware support: independently updateable .cbmodule packages'
-    'Default firmware payloads: BL616 and SF32 Nano verified images; Pico UF2'
+    'Default firmware payloads: locked BL616, SF32 Nano, Pico 2 W and the ESP32-S3 board bundles declared in module.json'
     'SF32 flash tool: tools/sftool/sftool.exe (pinned 0.1.16, Apache-2.0)'
     'BL616 flash tool: tools/blflash/BLFlashCommand.exe (pinned 1.4.3, Apache-2.0)'
+    'ESP32-S3 flash tool: tools/esptool/esptool.exe (pinned 4.8.1, GPL-2.0-or-later)'
+    'Hardware validation status and pending checks: RELEASE-TESTING.md'
     "Classic diagnostics bundled: $([bool]$classicSource)"
     "Local unvalidated preview: $([bool]$localPreview)"
 ) -join [Environment]::NewLine

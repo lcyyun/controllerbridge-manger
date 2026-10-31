@@ -1,25 +1,99 @@
 {
   "schemaVersion": 1,
-  "runtimeApiVersion": 1,
+  "runtimeApiVersion": 2,
   "id": "esp32s3-ns2-bridge",
-  "moduleVersion": "0.1.0-dev",
-  "displayName": "ESP32-S3 NS2Pro Bridge",
+  "moduleVersion": "0.2.0-preview.1",
+  "displayName": "ESP32-S3 ControllerBridge",
   "boardFamily": "Espressif ESP32-S3",
-  "description": "只接收 Nintendo NS2Pro，并通过原生 USB 输出 Nintendo HID。",
+  "description": "NS2Pro BLE 物理输入；独立选择 DualSense、DualSense Edge、XInput、NS2Pro USB 输出。",
   "priority": 95,
-  "capabilities": "DeviceStatus, LiveInput, WirelessControllers, Rumble, Motion, Settings, SelfTest, RawCommands",
+  "capabilities": "DeviceStatus, LiveInput, UsbRoleSelection, WirelessControllers, Rumble, UsbAudio, Motion, Settings, SelfTest, RawCommands, FirmwareFlashing",
   "matchAny": [
-    { "profileKeys": ["ns2pro-nintendo"], "serialNumbers": ["NS2BRIDGE-S3-N-MGR2"] }
+    {
+      "profileKeys": [
+        "esp32s3-ds5-nsm1",
+        "esp32s3-dse-nsm1",
+        "esp32s3-xbox-nsm1",
+        "esp32s3-ns2pro-nsm1"
+      ]
+    }
   ],
   "hidDevices": [
     {
-      "key": "esp32s3-ns2", "displayName": "ESP32-S3 NS2Pro HID Manager",
-      "vendorId": 1406, "productId": 8297,
-      "managerUsagePage": 65280, "managerUsageId": 1,
-      "managerFeatureReportId": 127, "commandOutputReportId": 2,
-      "usbRole": "NintendoNs2Pro", "managerSerialNumber": "NS2BRIDGE-S3-N-MGR2",
-      "supportsInputReports": true,
-      "tags": ["esp32s3", "ns2pro"]
+      "key": "esp32s3-ds5-nsm1",
+      "displayName": "ESP32-S3 DualSense Manager",
+      "vendorId": 1356,
+      "productId": 3302,
+      "managerUsagePage": 65280,
+      "managerUsageId": 1,
+      "managerFeatureReportId": 126,
+      "commandOutputReportId": null,
+      "managerWireProtocol": "Nsm1",
+      "usbRole": "DualSense",
+      "legacyManagerProductName": "ControllerBridge ESP32-S3 DualSense",
+      "supportsInputReports": false,
+      "tags": [
+        "esp32s3",
+        "nsm1",
+        "ns2pro"
+      ]
+    },
+    {
+      "key": "esp32s3-dse-nsm1",
+      "displayName": "ESP32-S3 DualSense Edge Manager",
+      "vendorId": 1356,
+      "productId": 3570,
+      "managerUsagePage": 65280,
+      "managerUsageId": 1,
+      "managerFeatureReportId": 126,
+      "commandOutputReportId": null,
+      "managerWireProtocol": "Nsm1",
+      "usbRole": "DualSenseEdge",
+      "legacyManagerProductName": "ControllerBridge ESP32-S3 DualSense Edge",
+      "supportsInputReports": false,
+      "tags": [
+        "esp32s3",
+        "nsm1",
+        "ns2pro"
+      ]
+    },
+    {
+      "key": "esp32s3-xbox-nsm1",
+      "displayName": "ESP32-S3 XInput Manager",
+      "vendorId": 4617,
+      "productId": 20051,
+      "managerUsagePage": 65280,
+      "managerUsageId": 1,
+      "managerFeatureReportId": 126,
+      "commandOutputReportId": null,
+      "managerWireProtocol": "Nsm1",
+      "usbRole": "Xbox",
+      "legacyManagerProductName": "ControllerBridge ESP32-S3 XInput",
+      "supportsInputReports": false,
+      "tags": [
+        "esp32s3",
+        "nsm1",
+        "ns2pro"
+      ]
+    },
+    {
+      "key": "esp32s3-ns2pro-nsm1",
+      "displayName": "ESP32-S3 NS2Pro Manager",
+      "vendorId": 1406,
+      "productId": 8297,
+      "managerUsagePage": 65280,
+      "managerUsageId": 1,
+      "managerFeatureReportId": 126,
+      "commandOutputReportId": null,
+      "managerWireProtocol": "Nsm1",
+      "usbRole": "NintendoNs2Pro",
+      "legacyManagerProductName": "ControllerBridge ESP32-S3 NS2Pro",
+      "supportsInputReports": false,
+      "tags": [
+        "esp32s3",
+        "nsm1",
+        "ns2pro"
+      ]
     }
   ],
   "boards": [
@@ -27,26 +101,146 @@
       "id": "esp32s3-n16r8",
       "displayName": "ESP32-S3 N16R8",
       "family": "ESP32-S3",
-      "description": "具备原生 USB Device 的 ESP32-S3 开发板。"
+      "description": "16 MB Flash / 8 MB PSRAM (octal)；游戏与管理使用原生 USB 数据口。"
+    },
+    {
+      "id": "esp32s3-n4",
+      "displayName": "ESP32-S3 N4",
+      "family": "ESP32-S3",
+      "description": "4 MB Flash / 0 MB PSRAM (none)；游戏与管理使用原生 USB 数据口。"
+    },
+    {
+      "id": "esp32s3-n8",
+      "displayName": "ESP32-S3 N8",
+      "family": "ESP32-S3",
+      "description": "8 MB Flash / 0 MB PSRAM (none)；游戏与管理使用原生 USB 数据口。"
+    },
+    {
+      "id": "esp32s3-n8r2",
+      "displayName": "ESP32-S3 N8R2",
+      "family": "ESP32-S3",
+      "description": "8 MB Flash / 2 MB PSRAM (quad)；游戏与管理使用原生 USB 数据口。"
+    },
+    {
+      "id": "esp32s3-n8r8",
+      "displayName": "ESP32-S3 N8R8",
+      "family": "ESP32-S3",
+      "description": "8 MB Flash / 8 MB PSRAM (octal)；游戏与管理使用原生 USB 数据口。"
+    },
+    {
+      "id": "esp32s3-esp32supermini",
+      "displayName": "ESP32-S3 ESP32SUPERMINI",
+      "family": "ESP32-S3",
+      "description": "4 MB Flash / 2 MB PSRAM (quad)；游戏与管理使用原生 USB 数据口。"
     }
   ],
   "firmware": [
     {
-      "id": "esp32s3-ns2-current",
-      "displayName": "ESP32-S3 NS2Pro Bridge",
-      "version": "0.1.0-dev",
-      "description": "NS2Pro BLE、Nintendo HID、输入、IMU 与 HD Rumble。",
-      "boardIds": ["esp32s3-n16r8"],
-      "flashMethod": "None",
-      "artifactRelativePath": null,
-      "flashHint": "使用 ESP-IDF/esptool 烧录；正式镜像必须使用唯一 USB 序列号 NS2BRIDGE-S3-N-MGR2。"
+      "id": "esp32s3-n4",
+      "displayName": "ESP32-S3 N4",
+      "version": "0.2.0-preview.1",
+      "description": "NS2Pro BLE + 四种 USB 输出 + NSM1 Manager；硬件待实测。",
+      "boardIds": [
+        "esp32s3-n4"
+      ],
+      "flashMethod": "EspressifSerial",
+      "artifactRelativePath": "firmware/n4/flash-manifest.json",
+      "flashHint": "必须匹配 n4（4 MB Flash / 0 MB PSRAM）。按住 BOOT 后按 RESET 进入下载模式，选择 ESP32-S3 下载串口；完成后连接原生 USB 数据口。保留 NVS 设置，恢复失败可重新进入 ROM 下载模式重试。"
+    },
+    {
+      "id": "esp32s3-n8",
+      "displayName": "ESP32-S3 N8",
+      "version": "0.2.0-preview.1",
+      "description": "NS2Pro BLE + 四种 USB 输出 + NSM1 Manager；硬件待实测。",
+      "boardIds": [
+        "esp32s3-n8"
+      ],
+      "flashMethod": "EspressifSerial",
+      "artifactRelativePath": "firmware/n8/flash-manifest.json",
+      "flashHint": "必须匹配 n8（8 MB Flash / 0 MB PSRAM）。按住 BOOT 后按 RESET 进入下载模式，选择 ESP32-S3 下载串口；完成后连接原生 USB 数据口。保留 NVS 设置，恢复失败可重新进入 ROM 下载模式重试。"
+    },
+    {
+      "id": "esp32s3-n8r2",
+      "displayName": "ESP32-S3 N8R2",
+      "version": "0.2.0-preview.1",
+      "description": "NS2Pro BLE + 四种 USB 输出 + NSM1 Manager；硬件待实测。",
+      "boardIds": [
+        "esp32s3-n8r2"
+      ],
+      "flashMethod": "EspressifSerial",
+      "artifactRelativePath": "firmware/n8r2/flash-manifest.json",
+      "flashHint": "必须匹配 n8r2（8 MB Flash / 2 MB PSRAM）。按住 BOOT 后按 RESET 进入下载模式，选择 ESP32-S3 下载串口；完成后连接原生 USB 数据口。保留 NVS 设置，恢复失败可重新进入 ROM 下载模式重试。"
+    },
+    {
+      "id": "esp32s3-n8r8",
+      "displayName": "ESP32-S3 N8R8",
+      "version": "0.2.0-preview.1",
+      "description": "NS2Pro BLE + 四种 USB 输出 + NSM1 Manager；硬件待实测。",
+      "boardIds": [
+        "esp32s3-n8r8"
+      ],
+      "flashMethod": "EspressifSerial",
+      "artifactRelativePath": "firmware/n8r8/flash-manifest.json",
+      "flashHint": "必须匹配 n8r8（8 MB Flash / 8 MB PSRAM）。按住 BOOT 后按 RESET 进入下载模式，选择 ESP32-S3 下载串口；完成后连接原生 USB 数据口。保留 NVS 设置，恢复失败可重新进入 ROM 下载模式重试。"
+    },
+    {
+      "id": "esp32s3-n16r8",
+      "displayName": "ESP32-S3 N16R8",
+      "version": "0.2.0-preview.1",
+      "description": "NS2Pro BLE + 四种 USB 输出 + NSM1 Manager；硬件待实测。",
+      "boardIds": [
+        "esp32s3-n16r8"
+      ],
+      "flashMethod": "EspressifSerial",
+      "artifactRelativePath": "firmware/n16r8/flash-manifest.json",
+      "flashHint": "必须匹配 n16r8（16 MB Flash / 8 MB PSRAM）。按住 BOOT 后按 RESET 进入下载模式，选择 ESP32-S3 下载串口；完成后连接原生 USB 数据口。保留 NVS 设置，恢复失败可重新进入 ROM 下载模式重试。"
+    },
+    {
+      "id": "esp32s3-esp32supermini",
+      "displayName": "ESP32-S3 ESP32SUPERMINI",
+      "version": "0.2.0-preview.1",
+      "description": "NS2Pro BLE + 四种 USB 输出 + NSM1 Manager；硬件待实测。",
+      "boardIds": [
+        "esp32s3-esp32supermini"
+      ],
+      "flashMethod": "EspressifSerial",
+      "artifactRelativePath": "firmware/esp32supermini/flash-manifest.json",
+      "flashHint": "必须匹配 esp32supermini（4 MB Flash / 2 MB PSRAM）。按住 BOOT 后按 RESET 进入下载模式，选择 ESP32-S3 下载串口；完成后连接原生 USB 数据口。保留 NVS 设置，恢复失败可重新进入 ROM 下载模式重试。"
     }
   ],
   "usbRoles": [
-    { "role": "NintendoNs2Pro", "displayName": "Nintendo NS2Pro", "description": "原生 Nintendo 身份", "command": "role set ns2pro" }
+    {
+      "role": "DualSense",
+      "displayName": "DualSense",
+      "description": "DualSense USB 输出身份",
+      "command": "role set ds5"
+    },
+    {
+      "role": "DualSenseEdge",
+      "displayName": "DualSense Edge",
+      "description": "DualSense Edge USB 输出身份",
+      "command": "role set dse"
+    },
+    {
+      "role": "Xbox",
+      "displayName": "XInput",
+      "description": "XInput USB 输出身份",
+      "command": "role set xbox"
+    },
+    {
+      "role": "NintendoNs2Pro",
+      "displayName": "NS2Pro",
+      "description": "NS2Pro USB 输出身份",
+      "command": "role set ns2pro"
+    }
   ],
   "inputSources": [
-    { "preference": "NintendoNs2Pro", "displayName": "仅使用 NS2Pro", "description": "Bluetooth LE GATT", "command": "input set ns2pro" }
+    {
+      "preference": "NintendoNs2Pro",
+      "displayName": "NS2Pro BLE",
+      "description": "ESP32-S3 蓝牙仅支持 BLE；不能接入 DS5 蓝牙。",
+      "command": "input set ns2pro"
+    }
   ],
   "wirelessControllers": [
     {
@@ -59,8 +253,18 @@
       "forgetCommand": "ns2 forget"
     }
   ],
-  "statusCommands": ["status", "usb status", "settings", "motion status"],
-  "selfTestCommands": ["status", "usb status", "settings", "motion status", "rumble"],
+  "statusCommands": [
+    "status",
+    "usb status",
+    "settings"
+  ],
+  "selfTestCommands": [
+    "status",
+    "usb status",
+    "input status",
+    "motion status",
+    "rumble"
+  ],
   "primaryStatusCommand": "status",
   "inputStatusCommand": "input status",
   "saveSettingsCommand": "settings save",
@@ -70,5 +274,87 @@
     "usb raw {usbRaw}",
     "web parse {liveParsing}"
   ],
-  "rumbleCommandTemplate": "rumble test {target}"
+  "rumbleCommandTemplate": "rumble test {target}",
+  "operations": {
+    "mapping.read": {
+      "transport": "ManagerCommand",
+      "request": "mapping get {profile}"
+    },
+    "mapping.set": {
+      "transport": "ManagerCommand",
+      "request": "mapping set {profile} {target} {source}"
+    },
+    "mapping.reset": {
+      "transport": "ManagerCommand",
+      "request": "mapping reset {profile}"
+    },
+    "mapping.save": {
+      "transport": "ManagerCommand",
+      "request": "mapping save {profile}"
+    },
+    "device.reboot": {
+      "transport": "ManagerCommand",
+      "request": "reboot"
+    },
+    "settings.reset": {
+      "transport": "ManagerCommand",
+      "request": "settings reset"
+    }
+  },
+  "pages": [
+    {
+      "id": "esp32s3-mapping",
+      "label": "NS2Pro 按键映射",
+      "description": "按物理输入保存一张完整映射表，适用于四种 USB 输出。当前输出不支持的扩展目标仍保留配置。",
+      "icon": "Game",
+      "sections": [
+        {
+          "id": "mapping-buttons",
+          "label": "按键与扩展键",
+          "controls": [
+            {
+              "id": "esp32s3-ns2pro-map",
+              "type": "MappingEditor",
+              "label": "NS2Pro 按键来源",
+              "binding": "/entries",
+              "mappingProfile": "ns2pro",
+              "sourceCatalog": "controller.inputControls",
+              "targetCatalog": "bridge.outputControls",
+              "readAction": "mapping.read",
+              "applyAction": "mapping.set",
+              "resetAction": "mapping.reset",
+              "saveAction": "mapping.save"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "esp32s3-recovery",
+      "label": "ESP32-S3 恢复",
+      "description": "设置恢复会清除已保存的手柄、输出与映射，并重新启动接收器。固件损坏时可按 BOOT + RESET 后从创建接收器页重新烧录。",
+      "icon": "Settings",
+      "sections": [
+        {
+          "id": "recovery-actions",
+          "label": "设备恢复",
+          "controls": [
+            {
+              "id": "esp32s3-reboot",
+              "type": "ActionButton",
+              "label": "重新启动接收器",
+              "applyAction": "device.reboot"
+            },
+            {
+              "id": "esp32s3-settings-reset",
+              "type": "ActionButton",
+              "label": "恢复默认设置并重启",
+              "description": "清除保存的手柄与全部映射。",
+              "applyAction": "settings.reset"
+            }
+          ]
+        }
+      ]
+    }
+  ]
 }

@@ -214,3 +214,91 @@ the new compatibility module without replacing or rebuilding the manager.
 The current format provides archive integrity through complete SHA-256
 coverage. A future public auto-update channel should additionally require a
 publisher signature before unattended installation.
+
+## ESP32-S3 native USB management and flashing
+
+ESP32-S3 modules use `managerWireProtocol: "Nsm1"` in each HID profile. The
+profile selects the existing vendor collection (usage page `0xff00`,
+usage `1`, feature report ID `0x7e` / decimal `126`, 63-byte payload), with
+`supportsInputReports: false` and no command output report. Discovery requires
+the role-specific ControllerBridge product string; the serial is a stable
+per-chip identifier. The four USB output identities are independent of the
+single supported physical input, NS2Pro over BLE.
+
+NSM1 keeps its 22-byte little-endian header. Opcode `0x0010` transports an
+un-terminated UTF-8 Manager command (up to 512 bytes) and a UTF-8 JSON response
+(up to 4096 bytes), in contiguous 41-byte fragments. The client matches the
+transaction and opcode, rejects malformed/misordered fragments, and retries
+status `8` (Busy) without reissuing mutations. Legacy text Manager profiles
+continue using their existing protocol.
+
+NSM1 shares the existing HID interface, vendor collection and interrupt IN
+endpoint. Legacy feature report `0x7f` remains available; no new USB interface,
+endpoint or transmit FIFO is required. The existing interrupt IN endpoint
+satisfies [HID 1.11 section 4.4](https://www.usb.org/sites/default/files/documents/hid1_11.pdf).
+`supportsInputReports: false` means the Manager does not subscribe to that
+stream; commands and telemetry use feature report `0x7e` exclusively.
+
+Physical input telemetry is polled through feature commands and drawn with the existing
+vector controller. Only `unique_input_reports` and `input_rate_time_ms` from
+fresh physical source frames determine effective report rate. `source_epoch`,
+source changes, counter/time wrap, invalid input and stale input reset the
+measurement. USB output retransmits and Manager polling are never counted.
+Battery comes from `input_battery_percent` (or explicit null for unknown), not
+the emulated gamepad. The NS2Pro mapping page uses the firmware's single
+25-control source table across all output roles.
+
+`flashMethod: "EspressifSerial"` points to a board-specific manifest:
+
+```json
+{
+  "schemaVersion": 1,
+  "chip": "esp32s3",
+  "board": "n16r8",
+  "flashSizeMb": 16,
+  "psramSizeMb": 8,
+  "psramMode": "octal",
+  "flashMode": "dio",
+  "flashFrequencyMhz": 80,
+  "baudRate": 460800,
+  "files": [
+    { "kind": "bootloader", "path": "bootloader.bin", "address": "0x0", "size": 0, "sha256": "actual SHA-256" },
+    { "kind": "partition", "path": "partition-table.bin", "address": "0x8000", "size": 0, "sha256": "actual SHA-256" },
+    { "kind": "application", "path": "application.bin", "address": "0x10000", "size": 0, "sha256": "actual SHA-256" }
+  ]
+}
+```
+
+The illustrative sizes and hashes above must be replaced with actual values.
+Each firmware entry names exactly one `esp32s3-<board>` board and includes only
+that board's built images. Recognized memory profiles are `n4` (4/0), `n8`
+(8/0), `n8r2` (8/2 Quad), `n8r8` (8/8 Octal), `n16r8` (16/8 Octal) and
+`esp32supermini` (4/2 Quad), in MB Flash/PSRAM. Image headers must target
+ESP32-S3, DIO, 80 MHz and the selected flash capacity. The application must fit
+the sole factory application partition. Paths, lengths, hashes and all write
+ranges are checked before writing.
+
+The app runs only its pinned official esptool 4.8.1 executable. It probes the
+chip and exact physical flash capacity, writes the three images, and runs
+`verify_flash` before requesting the final reset. It never runs a module
+command/script, `--force`, `erase_flash`, or an executable from PATH. NVS is
+outside these writes. External PSRAM cannot be identified reliably through
+this ROM probe; selecting the actual board memory profile remains required.
+ROM recovery uses BOOT + RESET and the ESP32-S3 download serial interface;
+normal game/controller management uses the native USB data interface.
+
+Distributors must run `tools/bundle-esptool.ps1 -OutputDirectory <app-root>`
+before final package hashing and archiving. This copies the pinned executable,
+license and provenance to `tools/esptool`; no Python installation is required.
+The existing package extraction step must copy the complete ESP `.cbmodule`,
+including `firmware/<board>/`, into the app's module directory. The flasher
+cannot run if its binary hash differs from the compiled pin.
+
+Offline validation: Core tests cover NSM1 transactions/fragments, physical
+telemetry, unsafe/corrupted/wrong-board bundles and a fake executable that
+verifies chip-probe/write/readback ordering without opening serial ports.
+`BridgeManager.Modern.App.exe --esp32s3-smoke <output>` exercises real NSM1
+client-to-UI behavior with an in-memory transport, including source epoch,
+wrap, duplicate counters, vector controls, stale reset and update pages.
+Hardware enumeration, host drivers, actual flashing/recovery and controllers
+still require hardware validation.

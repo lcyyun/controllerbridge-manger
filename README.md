@@ -5,10 +5,10 @@ Windows desktop manager for ControllerBridge receivers.
 - Inline Create Receiver flow for board selection, firmware, flashing and settings.
 - Receiver connection, input source selection, rumble and diagnostics.
 - Separate PlayStation and Nintendo button-mapping editors.
-- Live input from USB reports, never from serial/status snapshots.
+- Live USB input, with physical input snapshots for management-only XInput/serial interfaces.
 - Independent Windows Gamepad and native DualSense input testing.
 - Responsive light/dark interface with live controller button, stick and trigger visualization.
-- Source-frame-deduplicated BL616 input rate and honest source battery telemetry on the card dashboard.
+- Source-frame-deduplicated input rate and physical source battery telemetry on the card dashboard.
 - BL616 mappings are saved per physical controller, across USB output identities.
 - Single interactive Manager instance and exclusive management-command ownership.
 
@@ -17,14 +17,15 @@ Available controls depend on the connected firmware. BL616 is identified
 independently in Xbox 360, DualSense, DualSense Edge and Nintendo NS2Pro modes;
 its native ROM download port is supported by the Manager firmware page.
 
-BL616 and SF32LB52-DevKit-Nano firmware are included in complete application
-packages. BL616 flashing uses the chip's native ROM download port and the bundled
+BL616, SF32LB52-DevKit-Nano, Pico 2 W and ESP32-S3 firmware are included in complete application
+packages. ESP32-S3 has independently built N4, N8, N8R2, N8R8, N16R8 and ESP32SUPERMINI
+images; select the actual Flash/PSRAM configuration. BL616 flashing uses the chip's native ROM download port and the bundled
 BLFlashCommand; SF32 flashing uses the bundled sftool. Pico uses BOOTSEL/UF2 and
-ESP32-S3 still uses its platform tools. Flashing requires explicit confirmation.
+ESP32-S3 uses the bundled ESP flashing backend. Flashing requires explicit confirmation.
 
 Firmware updates have their own page, separate from the setup wizard. The first
 update source is GitHub Releases; downloaded module packages are validated before
-installation. The page only offers Manager-integrated BL616 and SF32 targets.
+installation. The page offers the connected platform's integrated modules.
 Only packages matching the currently connected receiver are listed. Installation
 also verifies the manifest ID and rejects disconnects/device changes.
 Create Receiver opens inside the main window; its welcome page has a persistent
@@ -42,11 +43,13 @@ Native NS2Pro initialization and direct-PC rumble are not implemented by the
 independent input tester. Receiver-based input and rumble use their existing
 firmware paths.
 
-The 0.3.6-preview.1 test release bundles BL616 0.2.3-preview.1 with NS2Pro wake
-reconnect recovery and source-frame counters. Enable "包含预发布版本" in Manager
-update checks. Install the BL616 firmware separately from the firmware page to
-enable the new counters and reconnect behavior. NS2Pro battery is currently
-unknown; an emulated DualSense battery placeholder is not treated as a reading.
+The 0.3.7-preview.1 release preserves BL616 0.2.3-preview.1 and integrates new
+SF32, Pico and ESP32-S3 modules. Enable "包含预发布版本" in Manager update checks.
+Updating the app does not flash a receiver; install its firmware separately.
+ESP32-S3 accepts NS2Pro through BLE; its USB outputs still include DualSense,
+DualSense Edge, XInput and NS2Pro. SF32 and Pico also accept DualSense/Edge through
+Bluetooth Classic. Unknown physical battery levels remain unknown. Rate uses
+firmware source-frame counters; USB resends and UI polls never raise that rate.
 
 ## Build
 

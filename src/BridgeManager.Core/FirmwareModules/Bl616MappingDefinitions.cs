@@ -1,6 +1,6 @@
 namespace BridgeManager.Core.FirmwareModules;
 
-// BL616 stores one table per physical input, independent of the emulated USB role.
+// BL616 and Pico store one table per physical input, independent of the USB role.
 internal static class Bl616MappingDefinitions
 {
     public static readonly IReadOnlyDictionary<string, BridgeModuleOperationDefinition> Operations =
@@ -13,9 +13,12 @@ internal static class Bl616MappingDefinitions
         };
 
     public static readonly IReadOnlyList<BridgeModulePageDefinition> Pages =
+        CreatePages("bl616");
+
+    public static IReadOnlyList<BridgeModulePageDefinition> CreatePages(string moduleId) =>
     [
-        Page("ds5", "DualSense / DualSense Edge"),
-        Page("ns2pro", "Nintendo NS2Pro")
+        Page(moduleId, "ds5", "DualSense / DualSense Edge"),
+        Page(moduleId, "ns2pro", "Nintendo NS2Pro")
     ];
 
     private static BridgeModuleOperationDefinition Command(string request) => new()
@@ -24,9 +27,9 @@ internal static class Bl616MappingDefinitions
         Request = request
     };
 
-    private static BridgeModulePageDefinition Page(string profile, string label) => new()
+    private static BridgeModulePageDefinition Page(string moduleId, string profile, string label) => new()
     {
-        Id = $"bl616-{profile}-mapping",
+        Id = $"{moduleId}-{profile}-mapping",
         Label = $"{label} 映射",
         Description = "按输入手柄保存，适用于该手柄的所有 USB 输出身份。",
         Icon = "Game",
@@ -39,7 +42,7 @@ internal static class Bl616MappingDefinitions
                 [
                     new()
                     {
-                        Id = $"bl616-{profile}-button-map",
+                        Id = $"{moduleId}-{profile}-button-map",
                         Type = BridgeModuleControlType.MappingEditor,
                         Label = $"{label} 按键来源",
                         Binding = "/entries", MappingProfile = profile,

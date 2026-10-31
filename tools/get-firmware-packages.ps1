@@ -3,7 +3,7 @@ param(
     [string]$LockPath = (Join-Path $PSScriptRoot '..\firmware-releases.lock.json'),
     [string]$SourceDirectory,
     [string]$CacheDirectory = (Join-Path $PSScriptRoot '..\.cache\firmware'),
-    [ValidateSet('esp32s3-ns2-bridge', 'sf32-unified', 'pico-unified-bridge')]
+    [ValidateSet('bl616-unified', 'esp32s3-ns2-bridge', 'sf32-unified', 'pico-unified-bridge')]
     [string]$ModuleId,
     [switch]$Offline
 )
@@ -12,12 +12,13 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $lock = Get-Content -LiteralPath $LockPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $repositories = @{
+    'bl616-unified' = 'lcyyun/controllerbridge-manger'
     'sf32-unified' = 'lcyyun/controllerbridge-SF32LB52'
     'pico-unified-bridge' = 'lcyyun/controllerbridge-pico2w'
     'esp32s3-ns2-bridge' = 'lcyyun/controllerbridge-esp32s3'
 }
 if ($lock.schemaVersion -ne 1 -or @($lock.modules).Count -ne $repositories.Count) {
-    throw 'Expected exactly three locked first-party firmware modules.'
+    throw 'Expected exactly four locked first-party firmware modules.'
 }
 $ids = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
 foreach ($entry in $lock.modules) {

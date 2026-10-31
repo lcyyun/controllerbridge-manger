@@ -50,10 +50,15 @@ public abstract class BridgeFirmwareModuleBase : IBridgeFirmwareModule
 
 public sealed class Sf32UnifiedFirmwareModule : BridgeFirmwareModuleBase
 {
+    public override IReadOnlyDictionary<string, BridgeModuleOperationDefinition> Operations =>
+        Sf32MappingDefinitions.Operations;
+    public override IReadOnlyList<BridgeModulePageDefinition> Pages =>
+        Sf32MappingDefinitions.Pages;
+
     private static readonly IReadOnlyList<BridgeBoardDefinition> KnownBoards =
     [
         new("sf32lb52-devkit-nano", "SF32LB52-DevKit-Nano", "SF32LB52",
-            "当前实测开发板，USB 设备口配合板载下载串口。")
+            "Nano n16r16 构建目标，USB 设备口配合下载串口；新镜像待实机回归。")
     ];
 
     public override string Id => "sf32-unified";
@@ -87,7 +92,9 @@ public sealed class Sf32UnifiedFirmwareModule : BridgeFirmwareModuleBase
     ];
     public override IReadOnlyList<BridgeDeviceProfile> HidDevices =>
     [
+        BridgeDeviceProfiles.MicrosoftXbox360,
         BridgeDeviceProfiles.SonyDualSense,
+        BridgeDeviceProfiles.SonyDualSenseEdge,
         BridgeDeviceProfiles.NintendoNs2Pro with
         {
             ManagerSerialNumber = "HA2F83JI",
@@ -96,7 +103,9 @@ public sealed class Sf32UnifiedFirmwareModule : BridgeFirmwareModuleBase
     ];
     public override IReadOnlyList<BridgeUsbRoleOption> UsbRoles =>
     [
+        Role(BridgeUsbRole.Xbox, "XInput 身份"),
         Role(BridgeUsbRole.DualSense, "音频、震动与触觉"),
+        Role(BridgeUsbRole.DualSenseEdge, "Edge 身份与扩展按键"),
         Role(BridgeUsbRole.NintendoNs2Pro, "原生 Nintendo 身份")
     ];
     public override IReadOnlyList<BridgeInputSourceOption> InputSources =>
@@ -107,7 +116,7 @@ public sealed class Sf32UnifiedFirmwareModule : BridgeFirmwareModuleBase
     ];
     public override IReadOnlyList<BridgeWirelessControllerOption> WirelessControllers =>
     [
-        new("ds5", "DualSense / DS5", "Bluetooth Classic",
+        new("ds5", "DualSense / DualSense Edge", "Bluetooth Classic",
             ManagerCommands.Pair("ds5"), ManagerCommands.Connect("ds5"),
             ManagerCommands.Disconnect("ds5"), ManagerCommands.Forget("ds5")),
         new("ns2", "Nintendo NS2Pro", "Bluetooth LE",
@@ -143,6 +152,10 @@ public sealed class Sf32UnifiedFirmwareModule : BridgeFirmwareModuleBase
                 StringComparison.OrdinalIgnoreCase);
         }
 
+        if (descriptor.ProfileKey == "sf32lb52-xbox360") return true;
+        if (descriptor.ProfileKey == "dualsense-edge" &&
+            string.Equals(descriptor.SerialNumber, "DualSense Edge HID",
+                StringComparison.OrdinalIgnoreCase)) return true;
         if (descriptor.ProfileKey == "dualsense" &&
             string.Equals(descriptor.SerialNumber, "DualSense HID",
                 StringComparison.OrdinalIgnoreCase))
@@ -274,6 +287,17 @@ public sealed class Bl616UnifiedFirmwareModule : BridgeFirmwareModuleBase
 
 public sealed class Esp32S3Ns2BridgeFirmwareModule : BridgeFirmwareModuleBase
 {
+    public override IReadOnlyDictionary<string, BridgeModuleOperationDefinition> Operations =>
+        Bl616MappingDefinitions.Operations;
+    public override IReadOnlyList<BridgeModulePageDefinition> Pages =>
+        Bl616MappingDefinitions.CreatePages("esp32s3").Where(page => page.Sections
+            .SelectMany(section => section.Controls).Any(control => control.MappingProfile == "ns2pro")).ToArray();
+
+    private static BridgeDeviceProfile Nsm1(string key, string name, ushort vid, ushort pid, BridgeUsbRole role) =>
+        new(key, $"ESP32-S3 {name} Manager", vid, pid, BridgeHidUsages.VendorDefinedPage,
+            BridgeHidUsages.Manager, 0x7e, null, role, null, $"ControllerBridge ESP32-S3 {name}",
+            ["esp32s3", "nsm1", "ns2pro"])
+        { ManagerWireProtocol = BridgeManagerWireProtocol.Nsm1, SupportsInputReports = false };
     private static readonly IReadOnlyList<BridgeBoardDefinition> KnownBoards =
     [
         new("esp32s3-n16r8", "ESP32-S3 N16R8", "ESP32-S3",
@@ -284,33 +308,43 @@ public sealed class Esp32S3Ns2BridgeFirmwareModule : BridgeFirmwareModuleBase
     public override string DisplayName => "ESP32-S3 NS2Pro Bridge";
     public override string BoardFamily => "Espressif ESP32-S3";
     public override string Description =>
-        "只接收 Nintendo NS2Pro，并通过原生 USB 输出 Nintendo HID。";
+        "通过 BLE 接收 NS2Pro，支持 DualSense、Edge、XInput 和 NS2Pro USB 输出。";
     public override int Priority => 95;
     public override BridgeCapability Capabilities =>
         BridgeCapability.DeviceStatus |
         BridgeCapability.LiveInput |
+        BridgeCapability.UsbRoleSelection |
         BridgeCapability.WirelessControllers |
         BridgeCapability.Rumble |
+        BridgeCapability.UsbAudio |
         BridgeCapability.Motion |
         BridgeCapability.Settings |
         BridgeCapability.SelfTest |
-        BridgeCapability.RawCommands;
+        BridgeCapability.RawCommands |
+        BridgeCapability.FirmwareFlashing;
     public override IReadOnlyList<BridgeBoardDefinition> Boards => KnownBoards;
     public override IReadOnlyList<BridgeFirmwareDefinition> Firmware =>
     [
-        new("esp32s3-ns2-current", "ESP32-S3 NS2Pro Bridge", "0.1.0-dev",
-            "NS2Pro BLE、Nintendo HID、输入、IMU 与 HD Rumble。",
-            ["esp32s3-n16r8"], FirmwareFlashMethod.None, null,
-            "当前模块只负责管理与识别；固件使用 ESP-IDF/esptool 烧录。")
+        new("esp32s3-n16r8", "ESP32-S3 N16R8", "0.2.0-preview.1",
+            "NS2Pro BLE 与四种 USB 输出；本镜像待实机回归。",
+            ["esp32s3-n16r8"], FirmwareFlashMethod.EspressifSerial,
+            "modules/esp32s3-ns2-bridge/firmware/n16r8/flash-manifest.json",
+            "核对 N16R8 板型，使用 BOOT/RESET 进入下载模式并选择下载串口。")
     ];
     public override IReadOnlyList<BridgeDeviceProfile> HidDevices =>
-        [BridgeDeviceProfiles.NintendoNs2Pro with
-        {
-            ManagerSerialNumber = "NS2BRIDGE-S3-N-MGR2",
-            Tags = ["esp32s3", "ns2pro"]
-        }];
+    [
+        Nsm1("esp32s3-ds5-nsm1", "DualSense", 0x054c, 0x0ce6, BridgeUsbRole.DualSense),
+        Nsm1("esp32s3-dse-nsm1", "DualSense Edge", 0x054c, 0x0df2, BridgeUsbRole.DualSenseEdge),
+        Nsm1("esp32s3-xbox-nsm1", "XInput", 0x1209, 0x4e53, BridgeUsbRole.Xbox),
+        Nsm1("esp32s3-ns2pro-nsm1", "NS2Pro", 0x057e, 0x2069, BridgeUsbRole.NintendoNs2Pro)
+    ];
     public override IReadOnlyList<BridgeUsbRoleOption> UsbRoles =>
-        [Role(BridgeUsbRole.NintendoNs2Pro, "原生 Nintendo 身份")];
+    [
+        Role(BridgeUsbRole.DualSense, "DualSense 音频与触觉"),
+        Role(BridgeUsbRole.DualSenseEdge, "DualSense Edge 身份"),
+        Role(BridgeUsbRole.Xbox, "XInput 身份"),
+        Role(BridgeUsbRole.NintendoNs2Pro, "原生 Nintendo 身份")
+    ];
     public override IReadOnlyList<BridgeInputSourceOption> InputSources =>
         [Input(BridgeInputPreference.NintendoNs2Pro, "仅使用 NS2Pro", "Bluetooth LE")];
     public override IReadOnlyList<BridgeWirelessControllerOption> WirelessControllers =>
@@ -328,7 +362,8 @@ public sealed class Esp32S3Ns2BridgeFirmwareModule : BridgeFirmwareModuleBase
 
     public override bool Matches(DeviceDescriptor descriptor)
     {
-        return descriptor.ProfileKey == "ns2pro-nintendo" &&
+        return HidDevices.Any(profile => profile.Key == descriptor.ProfileKey) ||
+            descriptor.ProfileKey == "ns2pro-nintendo" &&
             string.Equals(descriptor.SerialNumber, "NS2BRIDGE-S3-N-MGR2",
                 StringComparison.OrdinalIgnoreCase);
     }
@@ -350,6 +385,11 @@ public sealed class Esp32S3Ns2BridgeFirmwareModule : BridgeFirmwareModuleBase
 
 public sealed class PicoUnifiedFirmwareModule : BridgeFirmwareModuleBase
 {
+    private static readonly IReadOnlyList<BridgeModulePageDefinition> MappingPages =
+        Bl616MappingDefinitions.CreatePages("pico");
+    public override IReadOnlyDictionary<string, BridgeModuleOperationDefinition> Operations =>
+        Bl616MappingDefinitions.Operations;
+    public override IReadOnlyList<BridgeModulePageDefinition> Pages => MappingPages;
     private static readonly IReadOnlyList<BridgeBoardDefinition> KnownBoards =
     [
         new("pico-2-w", "Raspberry Pi Pico 2 W", "RP2350",
@@ -378,18 +418,24 @@ public sealed class PicoUnifiedFirmwareModule : BridgeFirmwareModuleBase
     public override IReadOnlyList<BridgeBoardDefinition> Boards => KnownBoards;
     public override IReadOnlyList<BridgeFirmwareDefinition> Firmware =>
     [
-        new("pico-unified-current", "Pico 2 W Controller Bridge", "0.1.0",
-            "自动识别 DualSense/NS2Pro，并切换对应 USB 身份。",
+        new("pico-unified-current", "Pico 2 W Controller Bridge", "0.2.0-preview.1",
+            "DS5 Classic、NS2Pro BLE 与四种 USB 输出；实机回归待完成。",
             ["pico-2-w"], FirmwareFlashMethod.PicoUf2,
-            "modules/pico-unified-bridge/artifacts/pico-controller-bridge-0.1.uf2",
-            "按住 BOOTSEL 接入电脑，然后将 UF2 写入 RPI-RP2 盘。")
+            "modules/pico-unified-bridge/artifacts/controllerbridge-pico2w-unified-0.2.0-preview.1.uf2",
+            "按住 BOOTSEL 接入真正的 Pico 2 W 接收器，然后将 UF2 写入 RP2350 启动盘。")
     ];
     public override IReadOnlyList<BridgeDeviceProfile> HidDevices =>
         [BridgeDeviceProfiles.PicoAutoManager,
-         BridgeDeviceProfiles.PicoDualSense];
+         BridgeDeviceProfiles.PicoDualSense,
+         BridgeDeviceProfiles.PicoDualSenseEdge,
+         BridgeDeviceProfiles.PicoXInput,
+         BridgeDeviceProfiles.PicoNintendoNs2Pro,
+         BridgeDeviceProfiles.PicoNintendoNs2ProLegacy];
     public override IReadOnlyList<BridgeUsbRoleOption> UsbRoles =>
     [
         Role(BridgeUsbRole.DualSense, "DualSense / DS5 身份"),
+        Role(BridgeUsbRole.DualSenseEdge, "DualSense Edge 身份"),
+        Role(BridgeUsbRole.Xbox, "XInput 与独立管理接口"),
         Role(BridgeUsbRole.NintendoNs2Pro, "Nintendo NS2Pro 身份")
     ];
     public override IReadOnlyList<BridgeInputSourceOption> InputSources =>
@@ -414,7 +460,8 @@ public sealed class PicoUnifiedFirmwareModule : BridgeFirmwareModuleBase
     public override string? SaveSettingsCommand => "settings save";
 
     public override bool Matches(DeviceDescriptor descriptor) =>
-        descriptor.ProfileKey is "pico-auto-manager" or "pico-dualsense" ||
+        descriptor.ProfileKey is "pico-auto-manager" or "pico-dualsense" or
+            "pico-dualsense-edge" or "pico-xinput" or "pico-ns2pro" or "pico-ns2pro-legacy" ||
         (descriptor.ProfileKey == "ns2pro-nintendo" &&
          string.Equals(descriptor.SerialNumber, "HA2F83JF",
              StringComparison.OrdinalIgnoreCase));

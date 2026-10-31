@@ -148,8 +148,19 @@ public sealed partial class SetupWizardView
         }
         finally { DetectedDeviceList.ItemsSource = previousDevices; }
         WizardBoardList.SelectedItem = _moduleRegistry.GetBoards().Single(item => item.Id == "esp32s3-n16r8");
-        SmokeCapture.Require(!_wizardFirmware!.Artifact.Available && !WizardFlashButton.IsEnabled,
-            "ESP32 management metadata advertised a nonexistent bundled image.");
+        SmokeCapture.Require(_wizardFirmware!.Firmware.FlashMethod == FirmwareFlashMethod.EspressifSerial &&
+            WizardPortPanel.Visibility == Visibility.Visible && WizardPortBox.SelectedItem is null,
+            "ESP32 firmware did not select its native serial flashing flow.");
+        if (File.Exists(Path.Combine(AppContext.BaseDirectory, "tools", "esptool", "esptool.exe")))
+            SmokeCapture.Require(_wizardFirmware.Artifact.Available && _wizardFirmware.Artifact.FileCount == 3,
+                "Complete package is missing the three validated ESP32 images.");
+        else
+            SmokeCapture.Require(!WizardFlashButton.IsEnabled,
+                "Wizard enabled ESP32 flashing without the pinned tool.");
+        WizardBoardList.SelectedItem = _moduleRegistry.GetBoards().Single(item => item.Id == "pico-2-w");
+        SmokeCapture.Require(_wizardFirmware!.Firmware.FlashMethod == FirmwareFlashMethod.PicoUf2 &&
+            WizardPortPanel.Visibility == Visibility.Collapsed,
+            "Pico BOOTSEL flow incorrectly requires a serial port.");
         await File.WriteAllTextAsync(Path.Combine(output, "wizard-result.txt"),
             "PASS centered welcome and board text, hollow step rings, two-column cards, responsive footer, card wheel down/up/boundaries without changing selection, nested list ownership, single bottom notification, board-specific firmware, honest missing artifacts, no guessed COM, busy target and main-navigation lock, no device writes");
     }

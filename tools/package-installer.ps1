@@ -5,7 +5,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$IsccPath,
     [ValidatePattern('^\d+\.\d+\.\d+(\.\d+)?$')]
-    [string]$Version = '0.2.0',
+    [string]$Version,
     [switch]$AllowLocalPreview
 )
 
@@ -15,6 +15,16 @@ $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $package = (Resolve-Path -LiteralPath $PackagePath).Path
 $compiler = (Resolve-Path -LiteralPath $IsccPath).Path
 $output = Join-Path $root 'dist'
+$appInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $package 'BridgeManager.Modern.App.dll'))
+$productVersion = $appInfo.ProductVersion.Split('+')[0]
+if ($productVersion -notmatch '^(\d+\.\d+\.\d+)(?:-[A-Za-z0-9.-]+)?$') {
+    throw "Packaged application has an invalid product version: $productVersion"
+}
+$expectedVersion = $Matches[1]
+if ($Version -and $Version -cne $expectedVersion) {
+    throw "Installer version $Version disagrees with packaged application $productVersion."
+}
+$Version = $expectedVersion
 & (Join-Path $PSScriptRoot 'verify-modern-package.ps1') `
     -PackagePath $package -AllowLocalPreview:$AllowLocalPreview
 & $compiler "/DPackageDir=$package" "/DOutputDir=$output" "/DAppVersion=$Version" `

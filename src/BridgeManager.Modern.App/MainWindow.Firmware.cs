@@ -30,7 +30,7 @@ public sealed partial class MainWindow
     {
         var previousId = (FirmwareBoardBox.SelectedItem as BridgeBoardDefinition)?.Id;
         var connectedModule = _client is not null && _lastDescriptor is not null &&
-            _module.Id is "bl616-unified" or "sf32-unified"
+            _module.Id is "bl616-unified" or "sf32-unified" or "esp32s3-ns2-bridge" or "pico-unified-bridge"
             ? _module : null;
         var boardIds = connectedModule?.Boards.Select(board => board.Id)
             .ToHashSet(StringComparer.OrdinalIgnoreCase) ??
@@ -43,6 +43,8 @@ public sealed partial class MainWindow
         FirmwareBoardBox.ItemsSource = boards;
         FirmwareBoardBox.SelectedItem = boards.FirstOrDefault(board =>
             board.Id.Equals(previousId, StringComparison.OrdinalIgnoreCase)) ??
+            boards.FirstOrDefault(board => connectedModule?.Id == "esp32s3-ns2-bridge" &&
+                board.Id == "esp32s3-n16r8") ??
             boards.FirstOrDefault();
         RefreshFirmwareUpdateControls();
         if (connectedModule is not null && _firmwareStatusModuleId != connectedModule.Id)
@@ -50,7 +52,7 @@ public sealed partial class MainWindow
             _firmwareStatusModuleId = connectedModule.Id;
             FirmwareReleaseList.ItemsSource = null;
             FirmwareUpdateStatusText.Text = $"已连接 {connectedModule.DisplayName}。检查更新以获取发行固件，或使用已安装镜像。";
-            FirmwareRomExpander.IsExpanded = connectedModule.Id == "sf32-unified";
+            FirmwareRomExpander.IsExpanded = connectedModule.Id != "bl616-unified";
         }
         if (connectedModule is null)
         {
@@ -58,7 +60,7 @@ public sealed partial class MainWindow
             FirmwareReleaseList.ItemsSource = null;
             FirmwareInstallUpdateButton.IsEnabled = false;
             FirmwareUpdateStatusText.Text =
-                "请先连接 BL616 或 SF32 接收器；这里只显示当前设备的固件。";
+                "请先连接接收器；这里只显示当前设备对应的固件。";
         }
     }
 
@@ -69,10 +71,10 @@ public sealed partial class MainWindow
     {
         if (_firmwareUpdateBusy || _firmwareFlashBusy) return;
         if (_client is null || _lastDescriptor is null ||
-            _module.Id is not ("bl616-unified" or "sf32-unified"))
+            _module.Id is not ("bl616-unified" or "sf32-unified" or "esp32s3-ns2-bridge" or "pico-unified-bridge"))
         {
             const string message =
-                "请先连接 BL616 或 SF32 接收器，再检查该设备的固件更新。";
+                "请先连接接收器，再检查该设备的固件更新。";
             FirmwareUpdateStatusText.Text = message;
             ShowFirmwareInfo(message, true);
             RefreshFirmwareTargets();
@@ -84,8 +86,11 @@ public sealed partial class MainWindow
         try
         {
             var assets = await _firmwareReleaseService.GetModuleAssetsAsync(
-                repository: connectedModuleId == "sf32-unified"
-                    ? "controllerbridge-SF32LB52" : GithubModuleReleaseService.DefaultRepository,
+                repository: connectedModuleId switch {
+                    "sf32-unified" => "controllerbridge-SF32LB52",
+                    "esp32s3-ns2-bridge" => "controllerbridge-esp32s3",
+                    "pico-unified-bridge" => "controllerbridge-pico2w",
+                    _ => GithubModuleReleaseService.DefaultRepository },
                 cancellationToken: _windowCancellation.Token,
                 aggregateOfficialRepositories: false);
             var matchingAssets = assets.Where(asset =>
@@ -195,7 +200,7 @@ public sealed partial class MainWindow
     {
         var available = !_firmwareUpdateBusy && !_firmwareFlashBusy &&
             _client is not null && _lastDescriptor is not null &&
-            _module.Id is "bl616-unified" or "sf32-unified";
+            _module.Id is "bl616-unified" or "sf32-unified" or "esp32s3-ns2-bridge" or "pico-unified-bridge";
         FirmwareCheckUpdatesButton.IsEnabled = available;
         FirmwareInstallUpdateButton.IsEnabled = available &&
             FirmwareReleaseList.SelectedItem is GithubModuleAsset asset &&
@@ -214,7 +219,7 @@ public sealed partial class MainWindow
         var board = FirmwareBoardBox.SelectedItem as BridgeBoardDefinition;
         var choices = board is null ? [] : _moduleRegistry.GetFirmwareForBoard(board.Id)
             .Where(item => item.Firmware.FlashMethod is FirmwareFlashMethod.SifliSerial
-                or FirmwareFlashMethod.BouffaloUart)
+                or FirmwareFlashMethod.BouffaloUart or FirmwareFlashMethod.EspressifSerial or FirmwareFlashMethod.PicoUf2)
             .Select(item => new WizardFirmwareChoice(item.Module, item.Firmware))
             .ToArray();
         FirmwareImageBox.ItemsSource = choices;
@@ -225,6 +230,9 @@ public sealed partial class MainWindow
         SelectionChangedEventArgs e)
     {
         _firmwareSelection = FirmwareImageBox.SelectedItem as WizardFirmwareChoice;
+        FirmwarePortPanel.Visibility = _firmwareSelection?.Firmware.FlashMethod == FirmwareFlashMethod.PicoUf2
+            ? Visibility.Collapsed : Visibility.Visible;
+        FirmwareRecoveryHint.Text = _firmwareSelection?.Firmware.FlashHint ?? "选择板卡与固件后检查对应的烧录方式。";
         RefreshUsbOtaButton();
         FirmwareFlashButton.IsEnabled = false;
         if (_firmwareSelection is null)
@@ -248,6 +256,9 @@ public sealed partial class MainWindow
                 $"SF32 工具：{FirmwareFlashService.ResolveSifliTool() ?? "未找到 sftool"}",
             FirmwareFlashMethod.BouffaloUart =>
                 $"BL616 工具：{FirmwareFlashService.ResolveBouffaloTool() ?? "未找到 BLFlashCommand"}",
+            FirmwareFlashMethod.EspressifSerial =>
+                $"ESP32-S3 工具：{FirmwareFlashService.ResolveEspressifTool() ?? "缺少经过校验的 esptool"}",
+            FirmwareFlashMethod.PicoUf2 => "Pico 2 W：内置 UF2 写入 · BOOTSEL / RP2350 启动盘",
             _ => "不支持自动烧录"
         };
         FirmwarePreflightButton.IsEnabled = artifact.Available;
@@ -263,6 +274,7 @@ public sealed partial class MainWindow
         if (FirmwareUsbOtaButton is null) return;
         FirmwareUsbOtaButton.Visibility = _client is not null && _module.Id != "bl616-unified"
             ? Visibility.Collapsed : Visibility.Visible;
+        FirmwareUsbOtaHint.Visibility = FirmwareUsbOtaButton.Visibility;
         FirmwareUsbOtaButton.IsEnabled = !_firmwareFlashBusy && !_firmwareUpdateBusy &&
             _client is not null && _module.Id == "bl616-unified" &&
             _firmwareSelection is not null &&

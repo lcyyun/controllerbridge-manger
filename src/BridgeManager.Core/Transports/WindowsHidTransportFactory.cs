@@ -1,4 +1,5 @@
 using HidSharp;
+using HidSharp.Reports;
 
 namespace BridgeManager.Core.Transports;
 
@@ -34,12 +35,7 @@ public sealed class WindowsHidTransportFactory : IDeviceTransportFactory
                     var product = GetProductName(device);
                     var report = device.GetReportDescriptor();
                     var profile = identity.FirstOrDefault(candidate =>
-                        candidate.MatchesManagerIdentity(serial, product) &&
-                        report.DeviceItems.Any(item => item.Usages.ContainsValue(
-                            ((uint)candidate.ManagerUsagePage << 16) | candidate.ManagerUsageId)) &&
-                        report.FeatureReports.Any(feature =>
-                            feature.ReportID == candidate.ManagerFeatureReportId &&
-                            feature.Length >= ManagerProtocol.FeatureReportLength));
+                        MatchesManagerCollection(candidate, report, serial, product));
                     if (profile is null) continue;
                     descriptors.Add(new DeviceDescriptor(
                         device.DevicePath,
@@ -53,7 +49,8 @@ public sealed class WindowsHidTransportFactory : IDeviceTransportFactory
                         UsbRole: profile.UsbRole, ProfileKey: profile.Key,
                         SerialNumber: serial, ProductName: product,
                         ManagerFeatureReportId: profile.ManagerFeatureReportId,
-                        CommandOutputReportId: profile.CommandOutputReportId));
+                        CommandOutputReportId: profile.CommandOutputReportId)
+                        { ManagerWireProtocol = profile.ManagerWireProtocol });
                 }
                 catch (Exception error) when (error is IOException or UnauthorizedAccessException)
                 {
@@ -76,6 +73,15 @@ public sealed class WindowsHidTransportFactory : IDeviceTransportFactory
         IEnumerable<BridgeDeviceProfile> profiles) => profiles
         .OrderByDescending(profile => profile.ManagerSerialNumber is not null)
         .ThenByDescending(profile => profile.LegacyManagerProductName is not null);
+
+    internal static bool MatchesManagerCollection(BridgeDeviceProfile profile,
+        ReportDescriptor report, string? serial, string? product) =>
+        profile.MatchesManagerIdentity(serial, product) &&
+        report.DeviceItems.Any(item => item.Usages.ContainsValue(
+            ((uint)profile.ManagerUsagePage << 16) | profile.ManagerUsageId) &&
+            item.FeatureReports.Any(feature =>
+                feature.ReportID == profile.ManagerFeatureReportId &&
+                feature.Length >= ManagerProtocol.FeatureReportLength));
 
     public Task<IDeviceTransport> OpenAsync(DeviceDescriptor descriptor,
                                              CancellationToken cancellationToken)

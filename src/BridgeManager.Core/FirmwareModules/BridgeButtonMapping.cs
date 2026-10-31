@@ -126,6 +126,15 @@ public static class BridgeButtonMapping
     public static bool CanCapture(string? profile, string? output, BridgePhysicalInput input,
         string usbReportSource, IReadOnlyDictionary<string, string> deviceMapping)
     {
+        // A management snapshot contains original physical buttons before any
+        // output mapping. Its explicitly identified source can capture every
+        // output route, including already-remapped routes.
+        if ((profile == "ds5" && input == BridgePhysicalInput.DualSense &&
+             usbReportSource == "DS5 physical input") ||
+            (profile == "ns2pro" && input == BridgePhysicalInput.NintendoNs2Pro &&
+             usbReportSource == "NS2Pro physical input"))
+            return deviceMapping.Count == ControlIds.Count &&
+                   ControlIds.All(deviceMapping.ContainsKey);
         // USB reports contain mapped output, not the original physical buttons.
         // Only a native identity path gives an unambiguous physical capture.
         return profile == output &&

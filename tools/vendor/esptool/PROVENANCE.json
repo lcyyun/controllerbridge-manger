@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "name": "esptool",
+  "version": "4.8.1",
+  "target": "windows-x64",
+  "repository": "https://github.com/espressif/esptool",
+  "sourceTag": "v4.8.1",
+  "sourceCommit": "1e9df296ce5e97e17fd0a178ff6b96ae222dae95",
+  "sourceUrl": "https://github.com/espressif/esptool/tree/1e9df296ce5e97e17fd0a178ff6b96ae222dae95",
+  "archive": {
+    "fileName": "esptool-v4.8.1-win64.zip",
+    "url": "https://github.com/espressif/esptool/releases/download/v4.8.1/esptool-v4.8.1-win64.zip",
+    "sha256": "2483d409e241d8826ae0ff023eecf31a7d4de6c10ca5ee855b1420cdfd53aaf6",
+    "size": 33608517
+  },
+  "executable": {
+    "fileName": "esptool.exe",
+    "archiveEntry": "esptool-win64/esptool.exe",
+    "sha256": "069db0f1e4d8f929f36d0f60243499eb670626c03a686376728998aaaad2f664",
+    "size": 6760840
+  },
+  "license": {
+    "spdx": "GPL-2.0-or-later",
+    "fileName": "LICENSE.txt",
+    "sourceUrl": "https://raw.githubusercontent.com/espressif/esptool/1e9df296ce5e97e17fd0a178ff6b96ae222dae95/LICENSE",
+    "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+    "size": 18092
+  },
+  "distribution": "Unmodified standalone executable from the official v4.8.1 Windows release. Launched as a separate process; no Python installation required. Archive and executable are SHA-256 pinned. Only esptool.exe is redistributed; espsecure, espefuse and RFC2217 executables are not included."
+}

@@ -43,6 +43,7 @@ public sealed partial class MainWindow
     private int _consecutivePollFailures;
     private bool _connecting;
     private bool _reconnecting;
+    private bool _roleSwitchInProgress;
     private bool _autoReconnectEnabled;
     private int _connectionGeneration;
     private long _usbInputReports;
@@ -204,12 +205,12 @@ public sealed partial class MainWindow
             SetConnectionAppearance(false, "正在验证连接");
             if (!_localInputActive) InputHealthText.Text = descriptor.SupportsInputReports
                 ? "等待 USB Input report"
-                : "当前管理 HID 没有 USB Input report";
+                : "等待物理手柄输入快照";
             _lastUsbInputAt = null;
             _consecutivePollFailures = 0;
             AppendLog($"connected {descriptor.DisplayName}");
             ShowStatus(descriptor.DiagnosticOnly
-                ? "串口诊断已连接。实时输入仍需使用 USB HID。"
+                ? "串口诊断已连接，输入通过管理快照刷新。"
                 : reconnecting ? "USB HID 已在重枚举后自动恢复。" : "USB HID 已连接，可以开始完整功能测试。", false);
             RefreshFirmwareTargets();
             await RefreshStatusWithRetryAsync(logCommand: true);
@@ -476,7 +477,9 @@ public sealed partial class MainWindow
         ShowStatus("未找到经典诊断版，请从 classic 文件夹启动。", true);
     }
 
-    private async void TestAll_Click(object sender, RoutedEventArgs e)
+    private async void TestAll_Click(object sender, RoutedEventArgs e) => await RunSelfTestAsync();
+
+    private async Task RunSelfTestAsync()
     {
         if (_client is null && !await ConnectSelectedDeviceAsync())
         {
@@ -505,7 +508,7 @@ public sealed partial class MainWindow
         }
         result.AppendLine();
         result.AppendLine($"自动检查 {passed}/{commands.Count} 通过");
-        if (_module.Capabilities.Has(BridgeCapability.UsbAudio) &&
+        if (CanTestCurrentUsbAudio() &&
             replies.TryGetValue(ManagerCommands.UsbStatus, out var usb))
         {
             var hasAudioCounters = usb.TryGetProperty("audio_out_packets", out _) &&
@@ -534,7 +537,7 @@ public sealed partial class MainWindow
             manualChecks.Add("左右震动");
         if (_module.Capabilities.Has(BridgeCapability.Motion))
             manualChecks.Add("陀螺仪方向");
-        if (_module.Capabilities.Has(BridgeCapability.UsbAudio))
+        if (CanTestCurrentUsbAudio())
             manualChecks.Add("播放声音后音频 OUT 计数增长");
         result.AppendLine($"人工检查：{string.Join("、", manualChecks)}。");
         TestResultBox.Text = result.ToString();
@@ -544,7 +547,7 @@ public sealed partial class MainWindow
 
     private async void PollTimer_Tick(object? sender, object e)
     {
-        if (_inputClosing || _polling || _client is null || _reconnecting || _firmwareFlashBusy) return;
+        if (_inputClosing || _polling || _client is null || _reconnecting || _roleSwitchInProgress || _firmwareFlashBusy) return;
         _polling = true;
         try
         {
@@ -585,32 +588,47 @@ public sealed partial class MainWindow
 
     private async Task SetRoleAsync(BridgeUsbRoleOption option)
     {
+        if (_roleSwitchInProgress || _connecting || _reconnecting) return;
         if (_client is null || _transport is null)
         {
             ShowStatus("设备未连接。", true);
             return;
         }
-        _expectedRole = option.Role;
-        if (_transport.Descriptor.TransportKind == DeviceTransportKind.Serial)
-        {
-            await SendAndRenderAsync(option.Command);
-            await Task.Delay(700);
-            await RefreshStatusSafelyAsync();
-            return;
-        }
-
         var previous = _transport.Descriptor;
+        var roleTransportGeneration = _transportGeneration;
+        _roleSwitchInProgress = true;
+        _expectedRole = option.Role;
         try
         {
-            await SendCommandAsync(option.Command,
-                                   render: true, logCommand: true);
+            if (previous.TransportKind == DeviceTransportKind.Serial)
+            {
+                await SendAndRenderAsync(option.Command);
+                await Task.Delay(700);
+                await RefreshStatusSafelyAsync();
+                return;
+            }
+            try
+            {
+                var reply = await SendCommandAsync(option.Command, render: true, logCommand: true);
+                if (TryGetBool(reply, "ok", out var ok) && !ok)
+                {
+                    _expectedRole = previous.UsbRole;
+                    ShowStatus("接收器拒绝了 USB 身份切换，请查看诊断回复。", true);
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"role switch ACK unavailable: {ex}");
+            }
+            if (roleTransportGeneration != _transportGeneration) return;
+            await RecoverConnectionAsync(previous, $"切换到 {option.DisplayName}",
+                                         immediateDelayMs: 700);
         }
-        catch (Exception ex)
+        finally
         {
-            AppendLog($"role switch ACK unavailable: {ex}");
+            _roleSwitchInProgress = false;
         }
-        await RecoverConnectionAsync(previous, $"切换到 {option.DisplayName}",
-                                     immediateDelayMs: 700);
     }
 
     private async Task SetInputAsync(BridgeInputSourceOption option)
@@ -702,6 +720,13 @@ public sealed partial class MainWindow
             await SendCommandAsync(_module.StatusCommands[index],
                 render: index == 0, logCommand: index == 0 && logCommand);
         }
+        // XInput and serial management interfaces have no gamepad input HID
+        // report. Read the physical snapshot without treating polling as Hz.
+        if (_transport?.Descriptor.SupportsInputReports == false &&
+            _module.Capabilities.Has(BridgeCapability.LiveInput) &&
+            !string.IsNullOrWhiteSpace(_module.InputStatusCommand) &&
+            !_module.StatusCommands.Contains(_module.InputStatusCommand))
+            await SendCommandAsync(_module.InputStatusCommand, render: false, logCommand: false);
     }
 
     private async Task RefreshStatusWithRetryAsync(bool logCommand = false)
@@ -759,12 +784,13 @@ public sealed partial class MainWindow
         }
     }
 
-    private async Task<JsonElement> SendCommandAsync(string command, bool render, bool logCommand)
+    private async Task<JsonElement> SendCommandAsync(string command, bool render, bool logCommand,
+        CancellationToken? commandCancellation = null)
     {
         if (_inputClosing || _client is not { } client)
             throw new InvalidOperationException("设备未连接。");
         var generation = _transportGeneration;
-        using var doc = await client.SendCommandAsync(command, _windowCancellation.Token);
+        using var doc = await client.SendCommandAsync(command, commandCancellation ?? _windowCancellation.Token);
         if (_inputClosing || generation != _transportGeneration || !ReferenceEquals(client, _client))
             throw new OperationCanceledException("管理连接已更换，忽略旧回复。");
         var root = doc.RootElement.Clone();
@@ -796,11 +822,29 @@ public sealed partial class MainWindow
     private void UpdateSummary(JsonElement root)
     {
         if (_inputClosing) return;
+        var previousSource = _status.ActiveInput;
         _status = _status.Merge(BridgeStatusSnapshot.Parse(root));
+        if (previousSource != _status.ActiveInput || _status.InputValid != true || _status.InputStale == true)
+        {
+            _lastManagerInput = null;
+            _lastManagerInputAt = null;
+            if (!_localInputActive) ClearInputTest("等待有效手柄输入");
+            _dynamicPageRenderer.OnInputSnapshot(EmptyReceiverInput, BridgePhysicalInput.None);
+            if (previousSource != _status.ActiveInput)
+            {
+                _usbFrames.Reset();
+                _lastUsbInputAt = null;
+                _receiverRate.Reset();
+            }
+        }
         ObserveEffectiveInputRate(root);
+        ObserveManagerInput(root);
         if (_status.UsbRole != BridgeUsbRole.Unknown)
         {
-            _expectedRole = _status.UsbRole;
+            // A deferred role ACK (and an in-flight status reply) can still
+            // report the previous identity. Preserve the user's target until
+            // re-enumeration has selected and verified the new interface.
+            if (!_roleSwitchInProgress) _expectedRole = _status.UsbRole;
             RoleText.Text = _status.UsbRole.DisplayName();
         }
         if (_status.ActiveInput != BridgePhysicalInput.Unknown)
@@ -811,7 +855,7 @@ public sealed partial class MainWindow
         {
             InputPreferenceText.Text = $"偏好：{_status.InputPreference.DisplayName()}";
         }
-        if (!_localInputActive && _transport?.Descriptor.SupportsInputReports == true &&
+        if (!_localInputActive &&
             _status.InputValid is bool inputValid)
         {
             var inputStale = _status.InputStale == true;
@@ -822,7 +866,7 @@ public sealed partial class MainWindow
                     : "等待有效手柄输入";
                 AccelText.Text = "Accel：等待有效数据";
                 GyroText.Text = "Gyro：等待有效数据";
-                ResetInputVisuals();
+                ClearInputTest(InputHealthText.Text);
             }
         }
         if (_status.ReportRateHz is double rate)
@@ -851,10 +895,10 @@ public sealed partial class MainWindow
             var errors = _status.AudioOutErrors.GetValueOrDefault() +
                          _status.AudioInErrors.GetValueOrDefault() +
                          _status.AudioOpusErrors.GetValueOrDefault();
-            AudioStatusText.Text = $"DS5 音频：扬声器{(_status.AudioSpeakerOpen == true ? "已打开" : "未打开")} / 麦克风{(_status.AudioMicOpen == true ? "已打开" : "未打开")}；" +
+            AudioStatusText.Text = $"DS5 音频：扬声器{AudioOpenState(_status.AudioSpeakerOpen)} / 麦克风{AudioOpenState(_status.AudioMicOpen)}；" +
                 $"OUT {_status.AudioOutPackets.GetValueOrDefault()} 包, {_status.AudioOutBytes.GetValueOrDefault()} 字节；" +
                 $"BT {_status.AudioBtReports.GetValueOrDefault()} 包 / 丢弃 {_status.AudioBtDropped.GetValueOrDefault()}；" +
-                $"触觉 {_status.AudioHapticBlocks.GetValueOrDefault()} 块 -> NS2 更新 {_status.AudioNs2Updates.GetValueOrDefault()} / 停止 {_status.AudioNs2Stops.GetValueOrDefault()} / 混合 {_status.AudioNs2MixedTicks.GetValueOrDefault()} tick（{(_status.AudioNs2Active == true ? "活动" : "静止")}）；" +
+                $"触觉 {_status.AudioHapticBlocks.GetValueOrDefault()} 块 -> NS2 更新 {_status.AudioNs2Updates.GetValueOrDefault()} / 停止 {_status.AudioNs2Stops.GetValueOrDefault()} / 混合 {_status.AudioNs2MixedTicks.GetValueOrDefault()} tick（{(_status.AudioNs2Active switch { true => "活动", false => "静止", null => "未知" })}）；" +
                 $"IN {_status.AudioInPackets.GetValueOrDefault()} 包, 错误 {errors}";
         }
         UpdateRoleControls(_status);
@@ -895,9 +939,9 @@ public sealed partial class MainWindow
         });
     }
 
-    private void UpdateInputDisplay(ControllerInputSnapshot input, bool local = false)
+    private void UpdateInputDisplay(ControllerInputSnapshot input, bool local = false, bool physicalSnapshot = false)
     {
-        if (!local && (_status.InputValid != true || _status.InputStale == true))
+        if (!local && !ReceiverSourceIsFresh)
         {
             InputHealthText.Text =
                 $"USB 报告正常（{_usbInputReports} 包），但无线手柄未连接";
@@ -916,8 +960,10 @@ public sealed partial class MainWindow
             ? "DualSense" : input.Source.StartsWith("NS2", StringComparison.Ordinal)
                 ? "NS2Pro" : input.Source;
         InputHealthText.Text = local ? $"输入正常：{_selectedLocalDevice?.DisplayName ?? sourceName}"
+            : physicalSnapshot ? $"输入正常：{sourceName}（物理输入管理快照）"
             : $"输入正常：{sourceName}（USB 包 {_usbInputReports}）";
-        if (!local) InputRateText.Text = $"有效输入 {ActualReportRateText.Text}（源帧去重） · USB 原始实收 {_usbInputReports} 包";
+        if (!local) InputRateText.Text = $"有效输入 {ActualReportRateText.Text}（源帧去重）" +
+            (physicalSnapshot ? " · 管理快照刷新" : $" · USB 原始实收 {_usbInputReports} 包");
         SetControllerArtwork(input.Source);
         _controllerInputDiagram?.Update(input);
         var pressed = ButtonNames.Where((_, index) =>
@@ -930,7 +976,7 @@ public sealed partial class MainWindow
         UpdateStickVisual(RightStickDot, input.RightX, input.RightY);
         LeftTriggerBar.Value = input.LeftTrigger;
         RightTriggerBar.Value = input.RightTrigger;
-        BatteryText.Text = (local ? input.BatteryPercent : ReceiverBatteryPercent) is int battery
+        BatteryText.Text = (local || physicalSnapshot ? input.BatteryPercent : ReceiverBatteryPercent) is int battery
             ? $"电量：{battery}%" : "电量：未知";
         AccelText.Text = input.MotionValid
             ? $"Accel X {input.AccelX,6} / Y {input.AccelY,6} / Z {input.AccelZ,6}"
@@ -1012,13 +1058,10 @@ public sealed partial class MainWindow
         _usbInputReports = 0;
         _lastUsbInputAt = null;
         _receiverRate.Reset();
-        _effectiveInputRate.Reset();
-        _effectiveRateSupported = false;
-        _effectiveRateSource = null;
-        _effectiveRateReceivedAt = null;
-        _receiverBattery = null;
-        _hasBatteryTelemetry = false;
-        _reportedBattery = null;
+        _sourceTelemetry.Reset();
+        _lastManagerInput = null;
+        _lastManagerInputAt = null;
+        if (!_inputClosing && !_localInputActive) ClearInputTest("接收器连接已断开");
         if (!_inputClosing) UpdateHomeTelemetry();
         if (clearSummary && !_inputClosing)
         {
@@ -1049,6 +1092,7 @@ public sealed partial class MainWindow
         }
 
         _reconnecting = true;
+        var expectedRole = _expectedRole;
         var receiverModule = _moduleRegistry.Resolve(previous);
         var generation = ++_connectionGeneration;
         try
@@ -1058,7 +1102,7 @@ public sealed partial class MainWindow
             ConnectionText.Text = "正在重新连接";
             SetConnectionAppearance(false, "正在重新连接");
             ShowStatus($"{reason}，正在等待 USB HID 重新枚举。", false);
-            AppendLog($"reconnect started: {reason}; expected role={_expectedRole}");
+            AppendLog($"reconnect started: {reason}; expected role={expectedRole}");
 
             for (var attempt = 1; attempt <= 20; attempt++)
             {
@@ -1072,7 +1116,7 @@ public sealed partial class MainWindow
                 if (_inputClosing || !_autoReconnectEnabled || generation != _connectionGeneration) return;
                 DeviceList.ItemsSource = devices;
                 var target = DeviceReconnectSelector.Select(
-                    devices.Select(_moduleRegistry.NormalizeDescriptor), previous, _expectedRole,
+                    devices.Select(_moduleRegistry.NormalizeDescriptor), previous, expectedRole,
                     receiverModule.Id != _moduleRegistry.Fallback.Id ? receiverModule.Matches : null);
                 if (target is null)
                 {
@@ -1157,6 +1201,12 @@ public sealed partial class MainWindow
     private void ActivateModule(IBridgeFirmwareModule module)
     {
         _module = module;
+        var esp = module.Id == "esp32s3-ns2-bridge";
+        ScaleBox.Minimum = esp ? 0 : 5;
+        ScaleBox.Maximum = esp ? 100 : 250;
+        HoldBox.Maximum = esp ? 2000 : 3000;
+        TickBox.Minimum = esp ? 4 : 5;
+        StopsBox.Maximum = esp ? 10 : 12;
         ActiveModuleText.Text =
             $"模块：{module.DisplayName} {module.ModuleVersion}";
 
@@ -1219,8 +1269,53 @@ public sealed partial class MainWindow
             ShowStatus("当前固件模块没有提供震动测试命令。", false);
             return;
         }
-        await SendAndRenderAsync(command);
+        if (target != "stop" || _module.Id != "esp32s3-ns2-bridge")
+        {
+            await SendAndRenderAsync(command);
+            return;
+        }
+        // ESP's stop command also disables future host feedback. Preserve the
+        // user's known enable setting while stopping the current test output.
+        var wasEnabled = _status.RumbleEnabled;
+        var generation = _transportGeneration;
+        var client = _client;
+        try
+        {
+            if (!wasEnabled.HasValue)
+            {
+                var configuration = await SendCommandAsync("rumble config", render: false, logCommand: false);
+                if (!TryGetBool(configuration, "ok", out var configOk) || !configOk ||
+                    !TryGetBool(configuration, "rumble_enabled", out var configuredEnabled))
+                    throw new InvalidDataException("无法读取原有的震动转发设置，请重试停止震动。");
+                wasEnabled = configuredEnabled;
+            }
+            var reply = await SendCommandAsync(command, render: true, logCommand: true);
+            if (!TryGetBool(reply, "ok", out var ok) || !ok)
+                throw new InvalidOperationException("接收器未确认停止震动。");
+            if (wasEnabled == true && TryGetBool(reply, "rumble_enabled", out var enabled) && !enabled &&
+                generation == _transportGeneration && ReferenceEquals(client, _client))
+            {
+                var restored = await SendCommandAsync("rumble on", render: true, logCommand: true);
+                if (!TryGetBool(restored, "ok", out ok) || !ok ||
+                    !TryGetBool(restored, "rumble_enabled", out enabled) || !enabled)
+                    throw new InvalidOperationException("震动已停止，但未能恢复原有的主机震动转发设置。");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowStatus(FriendlyError(ex), true);
+            AppendLog(ex.ToString());
+        }
     }
+
+    private bool CanTestCurrentUsbAudio() =>
+        _module.Capabilities.Has(BridgeCapability.UsbAudio) &&
+        _status.UsbRole is BridgeUsbRole.DualSense or BridgeUsbRole.DualSenseEdge;
+
+    private static string AudioOpenState(bool? open) => open switch
+    {
+        true => "已打开", false => "未打开", null => "未知"
+    };
 
     private void ShowPage(string page)
     {
@@ -1313,10 +1408,101 @@ public sealed partial class MainWindow
 
         var request = BridgeModuleOperationEngine.BuildRequest(
             operation, parameters);
+        if (_module.Id == "esp32s3-ns2-bridge" && operationId == "settings.reset")
+            return await ResetEspSettingsAsync(request, async previous =>
+            {
+                // Firmware schedules reset/restart 1200 ms after completion.
+                // In Nintendo mode an earlier scan could reopen the old handle.
+                await RecoverConnectionAsync(previous, "恢复 ESP32-S3 默认设置", immediateDelayMs: 1500);
+                return _client is not null && _status.UsbRole == BridgeUsbRole.NintendoNs2Pro;
+            });
         var response = await SendCommandAsync(request, render: true,
                                                logCommand: true);
         return BridgeModuleOperationEngine.SelectSuccessfulResponse(
             operationId, operation, response);
+    }
+
+    private async Task<JsonElement> ResetEspSettingsAsync(string request,
+        Func<DeviceDescriptor, Task<bool>> recover,
+        TimeSpan? waitTimeout = null, TimeSpan? pollDelay = null)
+    {
+        if (_roleSwitchInProgress || _connecting || _reconnecting)
+            throw new InvalidOperationException("正在切换或恢复连接，请稍后重试。");
+        if (_transport is null || _client is null)
+            throw new InvalidOperationException("设备未连接。");
+        var previous = _transport.Descriptor;
+        var generation = _transportGeneration;
+        var previousExpected = _expectedRole;
+        var restorePreviousRole = true;
+        var pollingWasEnabled = _pollTimer.IsEnabled;
+        _pollTimer.Stop();
+        _roleSwitchInProgress = true;
+        _expectedRole = BridgeUsbRole.NintendoNs2Pro;
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(_windowCancellation.Token);
+        // Forget has a 10 s firmware deadline. Allow its final error/status reply.
+        deadline.CancelAfter(waitTimeout ?? TimeSpan.FromSeconds(12));
+        async Task<JsonElement> RecoverResetAsync()
+        {
+            if (_inputClosing || generation != _transportGeneration)
+                throw new OperationCanceledException("管理连接已更换，取消恢复默认后的重连。");
+            restorePreviousRole = false;
+            if (!await recover(previous))
+                throw new IOException("默认设置已请求，但尚未重新连接到 Nintendo USB 身份。");
+            // An I/O failure can be transient, especially when the old role was
+            // already Nintendo. Reopening that interface does not prove reset.
+            var confirmed = await SendCommandAsync("settings status", false, false);
+            if (ReadEspResetPending(confirmed))
+                throw new InvalidOperationException("接收器已重新连接，但恢复默认仍在进行，尚未确认完成。");
+            return JsonSerializer.SerializeToElement(new { ok = true, reset_pending = false, reconnected = true });
+        }
+        try
+        {
+            // Only an accepted reset can turn a later I/O failure into an
+            // expected reboot; a missing/rejected initial ACK is not success.
+            var acknowledgement = await SendCommandAsync(request, true, true, deadline.Token);
+            if (!TryGetBool(acknowledgement, "ok", out var ok) || !ok ||
+                !TryGetBool(acknowledgement, "reset_pending", out var pending) || !pending)
+                throw new InvalidOperationException("接收器未接受恢复默认请求，请查看诊断回复。");
+            ShowStatus("正在清除 ESP32-S3 配对记录并恢复默认设置…", false);
+            while (true)
+            {
+                await Task.Delay(pollDelay ?? TimeSpan.FromMilliseconds(200), deadline.Token);
+                if (_inputClosing || generation != _transportGeneration)
+                    throw new OperationCanceledException("管理连接已更换，取消旧设备的恢复默认状态轮询。");
+                JsonElement progress;
+                try
+                {
+                    progress = await SendCommandAsync("settings status", false, false, deadline.Token);
+                }
+                catch (IOException)
+                {
+                    return await RecoverResetAsync();
+                }
+                if (!ReadEspResetPending(progress)) return await RecoverResetAsync();
+            }
+        }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested && !_windowCancellation.IsCancellationRequested)
+        {
+            throw new TimeoutException("等待 ESP32-S3 清除配对和恢复默认超时，未确认重置完成。");
+        }
+        finally
+        {
+            if (restorePreviousRole && generation == _transportGeneration) _expectedRole = previousExpected;
+            _roleSwitchInProgress = false;
+            if (pollingWasEnabled && _client is not null && !_inputClosing) _pollTimer.Start();
+        }
+    }
+
+    private static bool ReadEspResetPending(JsonElement progress)
+    {
+        if (!TryGetBool(progress, "ok", out var ok) || !ok ||
+            !TryGetBool(progress, "reset_pending", out var pending) ||
+            !progress.TryGetProperty("reset_error", out var error) ||
+            error.ValueKind != JsonValueKind.Number || !error.TryGetInt32(out var errorCode))
+            throw new InvalidDataException("恢复默认进度回复缺少有效的 reset_pending/reset_error。");
+        if (errorCode != 0)
+            throw new InvalidOperationException($"ESP32-S3 恢复默认失败（错误 {errorCode}），未完成重置。");
+        return pending;
     }
 
     private static string ModulePageGlyph(string? icon) => icon switch

@@ -8,6 +8,7 @@ New-Item -ItemType Directory -Path $source -Force | Out-Null
 $lockPath = Join-Path $root 'lock.json'
 $reader = Join-Path $PSScriptRoot 'get-firmware-packages.ps1'
 $repoMap = [ordered]@{
+    'bl616-unified' = 'lcyyun/controllerbridge-manger'
     'sf32-unified' = 'lcyyun/controllerbridge-SF32LB52'
     'pico-unified-bridge' = 'lcyyun/controllerbridge-pico2w'
     'esp32s3-ns2-bridge' = 'lcyyun/controllerbridge-esp32s3'
@@ -46,7 +47,7 @@ function Reject-Lock([string]$name, [scriptblock]$mutate) {
 }
 Save-Lock ($valid | ConvertFrom-Json)
 $resolved = @(& $reader -LockPath $lockPath -SourceDirectory $source -Offline)
-Require ($resolved.Count -eq 3) 'Did not resolve all locked modules.'
+Require ($resolved.Count -eq 4) 'Did not resolve all locked modules.'
 $selected = @(& $reader -LockPath $lockPath -SourceDirectory $source -ModuleId sf32-unified -Offline)
 Require ($selected.Count -eq 1 -and $selected[0].ModuleId -eq 'sf32-unified') 'Module selection failed.'
 $passed += 2
@@ -72,7 +73,7 @@ foreach ($entry in $entries) {
     New-Item -ItemType Directory -Path $directory -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $source $entry.asset) -Destination $directory
 }
-Require (@(& $reader -LockPath $lockPath -CacheDirectory $cache -Offline).Count -eq 3) 'Offline cache failed.'
+Require (@(& $reader -LockPath $lockPath -CacheDirectory $cache -Offline).Count -eq 4) 'Offline cache failed.'
 $passed++
 $missingRejected = $false
 try { [void]@(& $reader -LockPath $lockPath -CacheDirectory (Join-Path $root 'missing') -Offline) }
