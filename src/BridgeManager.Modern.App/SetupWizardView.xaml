@@ -4,7 +4,6 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:BridgeManager.Modern">
     <UserControl.Resources>
-        <local:CreationBoardDescriptionConverter x:Key="CreationBoardDescription" />
         <Style x:Key="CreationCardStyle" TargetType="GridViewItem">
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="VerticalContentAlignment" Value="Stretch" />
@@ -61,7 +60,7 @@
                                     <StackPanel Spacing="8" VerticalAlignment="Center" HorizontalAlignment="Stretch">
                                         <TextBlock Text="{Binding Family}" TextAlignment="Center" Style="{StaticResource QuietCaptionStyle}" />
                                         <TextBlock Text="{Binding DisplayName}" TextAlignment="Center" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                        <TextBlock Text="{Binding Converter={StaticResource CreationBoardDescription}}" TextAlignment="Center" Style="{StaticResource QuietCaptionStyle}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding Description}" TextAlignment="Center" Style="{StaticResource QuietCaptionStyle}" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Grid>
                             </DataTemplate></GridView.ItemTemplate>

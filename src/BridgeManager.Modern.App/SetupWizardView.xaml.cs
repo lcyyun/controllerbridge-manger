@@ -115,30 +115,10 @@ public sealed partial class SetupWizardView
 
     private void InitializeWizard()
     {
-        var boards = _moduleRegistry.GetBoards();
-        WizardBoardList.ItemsSource = boards;
         RefreshWizardPorts();
         _wizardState = LoadWizardState();
-        if (_wizardState is not null)
-        {
-            var board = boards.FirstOrDefault(item => item.Id.Equals(
-                _wizardState.BoardId, StringComparison.OrdinalIgnoreCase));
-            if (board is not null)
-            {
-                WizardBoardList.SelectedItem = board;
-                var choices = (WizardFirmwareList.ItemsSource as
-                    IEnumerable<WizardFirmwareChoice>)?.ToArray() ?? [];
-                var savedChoice = choices.FirstOrDefault(choice =>
-                    choice.Module.Id.Equals(_wizardState.ModuleId,
-                        StringComparison.OrdinalIgnoreCase) &&
-                    choice.Firmware.Id.Equals(_wizardState.FirmwareId,
-                        StringComparison.OrdinalIgnoreCase));
-                if (savedChoice is not null)
-                {
-                    WizardFirmwareList.SelectedItem = savedChoice;
-                }
-            }
-        }
+        ReloadWizardDeviceChoices(_wizardState?.BoardId,
+            _wizardState?.ModuleId, _wizardState?.FirmwareId);
         ShowWizardStep(1);
     }
 
@@ -154,11 +134,7 @@ public sealed partial class SetupWizardView
             var items = descriptors.Select(descriptor =>
             {
                 var module = _moduleRegistry.Resolve(descriptor);
-                var board = descriptor.TransportKind == DeviceTransportKind.Hid &&
-                            module.Id != _moduleRegistry.Fallback.Id &&
-                            module.Boards.Count == 1
-                    ? module.Boards[0]
-                    : null;
+                var board = GetDetectedWizardBoard(descriptor, module);
                 var identity = descriptor.TransportKind == DeviceTransportKind.Hid
                     ? $"USB HID {descriptor.VendorId:x4}:{descriptor.ProductId:x4}" +
                       (string.IsNullOrWhiteSpace(descriptor.SerialNumber)
@@ -219,7 +195,9 @@ public sealed partial class SetupWizardView
                 StringComparison.OrdinalIgnoreCase));
         if (board is not null)
         {
-            WizardBoardList.SelectedItem = board;
+            WizardBoardList.SelectedItem = WizardBoardList.Items.OfType<WizardDeviceChoice>()
+                .FirstOrDefault(device => device.ContainsBoard(board.Id));
+            SelectWizardBoardFirmware(board.Id);
             DetectedDeviceExpander.Header = $"已识别 {board.DisplayName} · 可手动更改";
             ShowStatus(
                 $"依据 USB {item.Descriptor.VendorId:x4}:{item.Descriptor.ProductId:x4}" +
@@ -324,17 +302,16 @@ public sealed partial class SetupWizardView
 
     private void InstallAndReloadModule(string packagePath)
     {
+        if (_flashBusy)
+            throw new InvalidOperationException("烧录进行中，完成后才能安装兼容包。");
         var selectedBoardId = _wizardBoard?.Id;
+        var selectedDeviceId = _wizardDevice?.Id;
+        var selectedModuleId = _wizardFirmware?.Module.Id;
+        var selectedFirmwareId = _wizardFirmware?.Firmware.Id;
         _moduleRegistry = _installModulePackage(packagePath);
-        var boards = _moduleRegistry.GetBoards();
-        WizardBoardList.ItemsSource = boards;
-        var board = boards.FirstOrDefault(item => item.Id.Equals(
-            selectedBoardId, StringComparison.OrdinalIgnoreCase));
-        if (board is not null)
-        {
-            WizardBoardList.SelectedItem = board;
-        }
-        _ = RefreshDetectedDevicesAsync();
+        ReloadWizardDeviceChoices(selectedBoardId, selectedModuleId,
+            selectedFirmwareId, selectedDeviceId);
+        if (_discoverDevices) _ = RefreshDetectedDevicesAsync();
     }
 
     private void ShowWizardStep(int step)
@@ -372,8 +349,10 @@ public sealed partial class SetupWizardView
 
         (WizardStepTitle.Text, WizardStepSubtitle.Text) = _wizardStep switch
         {
-            2 => ("选择你的板卡", "请选择手中的开发板型号，下一步只显示与它兼容的固件。"),
-            3 => ("选择兼容固件", $"{_wizardBoard?.DisplayName} · 仅列出适配此板卡的固件"),
+            2 => ("选择你的设备", "选择开发板；ESP32-S3 的具体内存版本在下一步选择。"),
+            3 when _wizardDevice?.Id == Esp32DeviceId =>
+                ("选择 ESP32-S3 版本", "按板卡上的型号选择 Flash / PSRAM 容量与对应固件。"),
+            3 => ("选择兼容固件", $"{_wizardDevice?.DisplayName} · 仅列出适配此板卡的固件"),
             4 => ("安装固件", "进入下载模式后检查连接，再确认写入；已有固件可跳过。"),
             5 => ("基本设置", "选择 USB 身份、无线输入与回报率"),
             6 => ("设置完成", "返回管理器连接设备并测试控制器"),
@@ -413,14 +392,14 @@ public sealed partial class SetupWizardView
             WizardFinish_Click(sender, e);
             return;
         }
-        if (_wizardStep == 2 && _wizardBoard is null)
+        if (_wizardStep == 2 && _wizardDevice is null)
         {
-            ShowStatus("请选择板卡型号。", true);
+            ShowStatus("请选择设备。", true);
             return;
         }
-        if (_wizardStep == 3 && _wizardFirmware is null)
+        if (_wizardStep == 3 && (_wizardFirmware is null || _wizardBoard is null))
         {
-            ShowStatus("请选择固件。", true);
+            ShowStatus(_wizardDevice?.Id == Esp32DeviceId ? "请选择具体板型版本。" : "请选择固件。", true);
             return;
         }
         if (_wizardStep == 5)
@@ -437,18 +416,26 @@ public sealed partial class SetupWizardView
     {
         if (_flashBusy) return;
         RefreshCreationSelections();
-        _wizardBoard = WizardBoardList.SelectedItem as BridgeBoardDefinition;
+        _wizardDevice = WizardBoardList.SelectedItem as WizardDeviceChoice;
+        _wizardBoard = null;
         _wizardFirmware = null;
-        if (_wizardBoard is null)
+        ClearWizardFirmwareDetails();
+        if (_wizardDevice is null)
         {
             WizardFirmwareList.ItemsSource = null;
             return;
         }
-        var choices = _moduleRegistry.GetFirmwareForBoard(_wizardBoard.Id)
-            .Select(item => new WizardFirmwareChoice(item.Module, item.Firmware))
+        var choices = _wizardDevice.Boards.SelectMany(board =>
+            _moduleRegistry.GetFirmwareForBoard(board.Id).Select(item =>
+                new WizardBoardFirmwareChoice(board,
+                    new WizardFirmwareChoice(item.Module, item.Firmware),
+                    _wizardDevice.Id == Esp32DeviceId)))
             .ToArray();
         WizardFirmwareList.ItemsSource = choices;
-        if (choices.Length == 1) WizardFirmwareList.SelectedItem = choices[0];
+        // A family selection never guesses its physical memory variant, even
+        // when an installed package currently supplies only one firmware.
+        if (choices.Length == 1 && _wizardDevice.Id != Esp32DeviceId)
+            WizardFirmwareList.SelectedItem = choices[0];
     }
 
     private void WizardFirmwareList_SelectionChanged(
@@ -456,10 +443,12 @@ public sealed partial class SetupWizardView
     {
         if (_flashBusy) return;
         RefreshCreationSelections();
-        _wizardFirmware = WizardFirmwareList.SelectedItem as WizardFirmwareChoice;
+        var selected = WizardFirmwareList.SelectedItem as WizardBoardFirmwareChoice;
+        _wizardBoard = selected?.Board;
+        _wizardFirmware = selected?.Choice;
         if (_wizardFirmware is null)
         {
-            WizardFlashButton.IsEnabled = false;
+            ClearWizardFirmwareDetails();
             return;
         }
 
@@ -510,6 +499,18 @@ public sealed partial class SetupWizardView
                                    FirmwareFlashMethod.BouffaloUart or FirmwareFlashMethod.EspressifSerial
             ? Visibility.Visible : Visibility.Collapsed;
         WizardFlashStatusText.Text = "尚未检查下载连接";
+    }
+
+    private void ClearWizardFirmwareDetails()
+    {
+        WizardFlashButton.IsEnabled = false;
+        WizardFlashMethodText.Text = "-";
+        WizardFlashHintText.Text = "请选择具体板型与固件。";
+        WizardArtifactText.Text = "固件文件：-";
+        WizardFirmwareHashText.Text = "";
+        WizardFlashToolText.Text = "烧录工具：-";
+        WizardFlashStatusText.Text = "尚未选择固件";
+        WizardPortPanel.Visibility = Visibility.Collapsed;
     }
 
     private void RefreshWizardPorts()

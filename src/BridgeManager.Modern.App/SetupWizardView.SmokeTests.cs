@@ -18,7 +18,8 @@ public sealed partial class SetupWizardView
         ShowWizardStep(1);
         await SmokeCapture.SaveAsync((FrameworkElement)_ownerWindow.Content, output, "creation-welcome-narrow.png");
         var board = _moduleRegistry.GetBoards().Single(item => item.Id == "sf32lb52-devkit-nano");
-        WizardBoardList.SelectedItem = board;
+        WizardBoardList.SelectedItem = WizardBoardList.Items.OfType<WizardDeviceChoice>()
+            .Single(device => device.ContainsBoard(board.Id));
         SmokeCapture.Require(_wizardFirmware?.Firmware.BoardIds.Contains(board.Id) == true,
             "Nano selection did not select its matching firmware.");
         ShowWizardStep(3);
@@ -147,7 +148,7 @@ public sealed partial class SetupWizardView
                 "Page wheel handler stole input from a genuinely scrollable nested device list.");
         }
         finally { DetectedDeviceList.ItemsSource = previousDevices; }
-        WizardBoardList.SelectedItem = _moduleRegistry.GetBoards().Single(item => item.Id == "esp32s3-n16r8");
+        await RunEsp32DeviceSelectionSmokeAsync(output);
         SmokeCapture.Require(_wizardFirmware!.Firmware.FlashMethod == FirmwareFlashMethod.EspressifSerial &&
             WizardPortPanel.Visibility == Visibility.Visible && WizardPortBox.SelectedItem is null,
             "ESP32 firmware did not select its native serial flashing flow.");
@@ -157,12 +158,13 @@ public sealed partial class SetupWizardView
         else
             SmokeCapture.Require(!WizardFlashButton.IsEnabled,
                 "Wizard enabled ESP32 flashing without the pinned tool.");
-        WizardBoardList.SelectedItem = _moduleRegistry.GetBoards().Single(item => item.Id == "pico-2-w");
+        WizardBoardList.SelectedItem = WizardBoardList.Items.OfType<WizardDeviceChoice>()
+            .Single(device => device.ContainsBoard("pico-2-w"));
         SmokeCapture.Require(_wizardFirmware!.Firmware.FlashMethod == FirmwareFlashMethod.PicoUf2 &&
             WizardPortPanel.Visibility == Visibility.Collapsed,
             "Pico BOOTSEL flow incorrectly requires a serial port.");
         await File.WriteAllTextAsync(Path.Combine(output, "wizard-result.txt"),
-            "PASS centered welcome and board text, hollow step rings, two-column cards, responsive footer, card wheel down/up/boundaries without changing selection, nested list ownership, single bottom notification, board-specific firmware, honest missing artifacts, no guessed COM, busy target and main-navigation lock, no device writes");
+            "PASS centered welcome and board text, hollow step rings, two-column cards, responsive footer, card wheel down/up/boundaries without changing selection, nested list ownership, single bottom notification, one ESP32-S3 family card and six explicit memory variants, saved variant/back-forward/subset reload, board-specific firmware, honest missing artifacts, no guessed COM or board, busy target and main-navigation lock, no device writes");
     }
 
     private static ScrollViewer? FindScrollViewer(DependencyObject element)
