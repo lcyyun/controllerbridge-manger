@@ -139,13 +139,12 @@ public sealed class ManagerCommandClient
             catch (ManagerCommandException ex) when (
                 ex.Message.Equals("bad reply magic", StringComparison.Ordinal))
             {
-                if (otaReply)
-                    await _otaRetryDelay(OtaBackoffMilliseconds(notReadyCount++), cancellationToken).ConfigureAwait(false);
-                else
-                {
-                    notReadyCount++;
-                    await Task.Delay(20, cancellationToken).ConfigureAwait(false);
-                }
+                // A legacy Sony manager reply can be gated off even after its
+                // task has published the ACK. GET_REPORT alone cannot reopen
+                // that gate: let the OTA caller resend its identical packet.
+                if (otaReply) throw;
+                notReadyCount++;
+                await Task.Delay(20, cancellationToken).ConfigureAwait(false);
                 continue;
             }
 
@@ -156,6 +155,8 @@ public sealed class ManagerCommandClient
             {
                 throw new ManagerCommandException("invalid reply chunk bounds");
             }
+            if (otaReply && chunk.Payload.Length == 0)
+                throw new ManagerCommandException("OTA reply cursor is exhausted; rearm the reply gate");
             if (total > result.Length)
             {
                 Array.Resize(ref result, total);
@@ -202,17 +203,14 @@ public sealed class ManagerCommandClient
             var packet = Bl616OtaProtocol.BuildPacket(operation, sequence, offset, payload.Span);
             // Retrying the exact packet is idempotent in the firmware, including
             // FINISH. Do not advance the counter until its ACK is received.
-            for (var retry = 0; retry < 4; retry++)
+            // Bound retries by the existing 30-second deadline, not a small
+            // packet count: signature checking, erase and FINISH can be slow.
+            for (var retry = 0; ; retry++)
             {
                 await _transport.WriteFeatureReportAsync(reportId, packet, timeout.Token).ConfigureAwait(false);
-                for (var attempt = 0; attempt < 30; attempt++)
+                try
                 {
-                    // Most ACKs are ready when SET_REPORT completes. Read first;
-                    // only yield if the firmware has not published this ACK yet.
-                    // A fixed per-packet delay adds minutes to a 46-byte stream.
-                    string json;
-                    try { json = await ReadJsonReplyAsync(reportId, timeout.Token, otaReply: true).ConfigureAwait(false); }
-                    catch (ManagerCommandException) { break; }
+                    var json = await ReadJsonReplyAsync(reportId, timeout.Token, otaReply: true).ConfigureAwait(false);
                     var reply = JsonDocument.Parse(json);
                     if (reply.RootElement.TryGetProperty("ota", out var ota) && ota.ValueKind == JsonValueKind.True &&
                         reply.RootElement.TryGetProperty("seq", out var seq) && seq.GetUInt16() == sequence &&
@@ -220,10 +218,20 @@ public sealed class ManagerCommandClient
                         reply.RootElement.TryGetProperty("offset", out var ackOffset) && ackOffset.GetUInt32() == offset)
                         return reply;
                     reply.Dispose();
-                    await _otaRetryDelay(OtaBackoffMilliseconds(attempt), timeout.Token).ConfigureAwait(false);
                 }
+                catch (ManagerCommandException) { }
+                // Legacy BL616 sets manager_reply_pending when a packet is
+                // queued, before the task publishes its reply. An early GET
+                // consumes the previous cursor and clears the gate; subsequent
+                // GETs then return native Sony data forever. Re-send the exact
+                // unacknowledged packet to rearm it. Firmware deduplicates that
+                // packet, including FINISH, so no flash data is applied twice.
+                // One immediate rearm handles this race without a per-fragment
+                // timer penalty. Continued not-ready replies yield with bounded
+                // backoff until the deadline, preventing a busy retry loop.
+                if (retry > 0)
+                    await _otaRetryDelay(OtaBackoffMilliseconds(retry - 1), timeout.Token).ConfigureAwait(false);
             }
-            throw new TimeoutException("BL616 OTA acknowledgement was not received.");
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -232,8 +240,7 @@ public sealed class ManagerCommandClient
         finally { _commandLock.Release(); }
     }
 
-    // Yield briefly for a normal firmware scheduling slice, but retain the
-    // previous polling budget for slow flash erase/hash/signature operations.
+    // Yield for pending firmware work without extending the command deadline.
     private static int OtaBackoffMilliseconds(int attempt) =>
         Math.Min(20, 2 << Math.Min(attempt, 4));
 }

@@ -77,6 +77,20 @@ internal static class Bl616OtaTests
         if (delays != 0 || ready.Writes != 1000 || ready.Reads != 2000)
             throw new Exception("Ready OTA packets still incur fixed polling delays or extra transfers.");
 
+        var empty = new AckReadinessTransport { EmptyReplies = 2 };
+        client = new ManagerCommandClient(empty, (_, token) =>
+        {
+            token.ThrowIfCancellationRequested();
+            return Task.CompletedTask;
+        });
+        using (var ack = client.SendBl616OtaPacketAsync(Bl616OtaOperation.Data,
+                   12, 4096, new byte[] { 1 }).GetAwaiter().GetResult())
+        {
+            if (empty.Writes != 3 || empty.EmptyReplies != 0 ||
+                ack.RootElement.GetProperty("offset").GetUInt32() != 4096)
+                throw new Exception("OTA treated an empty firmware reply as a completed ACK.");
+        }
+
         // Native HID reply while SET_REPORT is being processed, followed by
         // stale operation, sequence and offset ACKs, must never advance data.
         var pending = new AckReadinessTransport { PendingReplies = 4 };
@@ -90,7 +104,7 @@ internal static class Bl616OtaTests
         using (var ack = client.SendBl616OtaPacketAsync(Bl616OtaOperation.Data,
                    12, 4096, new byte[] { 1 }).GetAwaiter().GetResult())
         {
-            if (delays != 4 || pending.Writes != 1 || pending.PendingReplies != 0 ||
+            if (delays != 3 || pending.Writes != 5 || pending.PendingReplies != 0 ||
                 ack.RootElement.GetProperty("offset").GetUInt32() != 4096)
                 throw new Exception("OTA did not wait safely for the matching ACK.");
         }
@@ -108,7 +122,7 @@ internal static class Bl616OtaTests
         using (var ack = client.SendBl616OtaPacketAsync(Bl616OtaOperation.Data,
                    12, 4096, new byte[] { 1 }).GetAwaiter().GetResult())
         {
-            if (pending.Writes != 2 || delays != 100 || longestBackoff != 20)
+            if (pending.Writes != 101 || delays != 99 || longestBackoff != 20)
                 throw new Exception("Slow firmware processing lost its bounded polling/retry budget.");
         }
 
@@ -127,10 +141,11 @@ internal static class Bl616OtaTests
             throw new Exception("OTA ignored cancellation while waiting for firmware.");
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        var writesBeforeResume = pending.Writes;
         pending.PendingReplies = 0;
         using var resumed = client.SendBl616OtaPacketAsync(Bl616OtaOperation.Data,
             12, 4096, new byte[] { 1 }).GetAwaiter().GetResult();
-        if (pending.Writes != 2)
+        if (pending.Writes != writesBeforeResume + 1)
             throw new Exception("Cancelled OTA did not release the command lock.");
     }
 
@@ -142,6 +157,7 @@ internal static class Bl616OtaTests
         private uint _packetOffset;
         private byte _operation;
         public int PendingReplies { get; set; }
+        public int EmptyReplies { get; set; }
         public int Writes { get; private set; }
         public int Reads { get; private set; }
         public DeviceDescriptor Descriptor { get; } = new("offline", "offline", 0x054c, 0x0ce6,
@@ -163,6 +179,12 @@ internal static class Bl616OtaTests
             token.ThrowIfCancellationRequested();
             Reads++;
             var bytes = new byte[64]; bytes[0] = id;
+            if (EmptyReplies > 0)
+            {
+                EmptyReplies--;
+                Encoding.ASCII.GetBytes(ManagerProtocol.ReplyMagic).CopyTo(bytes, 1);
+                return Task.FromResult(bytes);
+            }
             if (_offset == 0)
             {
                 var pending = PendingReplies;

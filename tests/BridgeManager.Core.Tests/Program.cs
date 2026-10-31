@@ -8,6 +8,12 @@ using BridgeManager.Core.Transports;
 // Inert child executable for ESP flash sequencing tests; never opens hardware.
 if (Esp32S3Tests.TryRunFakeFlasher(args)) return;
 
+if (args is ["--ota-gate-regression"])
+{
+    Bl616OtaReplyGateTests.Run();
+    return;
+}
+
 // Isolated ownership helper. Never constructs a USB/serial transport.
 if (args.Length == 2 && args[0] == "--lease-hold")
 {
@@ -250,6 +256,7 @@ var tests = new (string Name, Action Run)[]
     ("gates experimental XInput discovery on explicit ID and exact serial", TestsBl616XInputExperiment),
     ("validates manager update channels, versions and origin", ManagerUpdateSelection),
     ("validates BL616 OTA frames, signatures and replay rejection", Bl616OtaTests.Run),
+    ("recovers consumed legacy Sony OTA reply gates without polling stalls", Bl616OtaReplyGateTests.Run),
     ("excludes competing processes and recovers ownership after crash", TestsManagerResourceOwnership),
     ("rejects overwritten manager reply instead of mixing transactions", RejectsOverwrittenManagerReply),
     ("builds Windows feature command payload", BuildsWindowsFeatureCommandPayload),

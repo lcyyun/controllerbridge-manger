@@ -320,8 +320,22 @@ public sealed partial class MainWindow
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
             if (client != _client || connectionGeneration != _connectionGeneration)
                 throw new IOException("接收器已断开或更换，请重新检查。");
+            var transferClock = System.Diagnostics.Stopwatch.StartNew();
+            FirmwareFlashStatusText.Text = "正在准备 USB 更新...";
             var progress = new Progress<double>(value =>
-                FirmwareFlashStatusText.Text = $"USB OTA 写入未运行分区：{value:P0}");
+            {
+                var bytes = (long)Math.Round(value * image.Length);
+                var seconds = Math.Max(0.001, transferClock.Elapsed.TotalSeconds);
+                var rate = bytes / seconds / 1024d;
+                var remaining = value > 0 ? seconds * (1 - value) / value : 0;
+                var estimate = remaining >= 3600 ? $"约 {remaining / 3600:N1} 小时" :
+                    remaining >= 60 ? $"约 {Math.Ceiling(remaining / 60):N0} 分钟" :
+                    $"约 {Math.Ceiling(remaining):N0} 秒";
+                FirmwareFlashStatusText.Text = value >= 1
+                    ? "传输完成，正在校验固件并准备重启..."
+                    : $"USB OTA 传输：{value:P0} · {bytes / 1024d:N1}/{image.Length / 1024d:N0} KiB · " +
+                      $"平均 {rate:N1} KiB/s · 剩余{estimate}";
+            });
             await new Bl616UsbOtaService().UpdateAsync(client, manifest, image, progress, _windowCancellation.Token);
             FirmwareFlashStatusText.Text = "镜像已校验，正在等待新固件启动...";
             await RecoverConnectionAsync(descriptor, "USB OTA 完成", immediateDelayMs: 1500);
