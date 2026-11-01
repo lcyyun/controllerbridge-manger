@@ -45,6 +45,7 @@ public sealed partial class MainWindow
                 !item.CanPair && !item.CanConnect && !item.CanDisconnect && !item.CanForget),
             "An unread wireless state was presented as unpaired or actionable.");
         var root = (FrameworkElement)Content;
+        await VerifyDpiSmokeAsync(output);
         SmokeCapture.Require(Grid.GetRow(ManagerUpdateBanner) == 2 &&
             Grid.GetRow(StatusBar) == 3 && Grid.GetRow(PageContentHost) == 1,
             "Update availability and runtime notifications must stay below page content.");
@@ -54,7 +55,7 @@ public sealed partial class MainWindow
             (860, 900, "narrow"), (620, 900, "compact"), (500, 900, "small")
         })
         {
-            AppWindow.Resize(new SizeInt32(width, height));
+            WindowSizing.ResizeInDips(this, width, height);
             await Task.Delay(250);
             await SmokeCapture.SaveAsync(root, output, $"sidebar-{suffix}.png");
             SmokeCapture.Require(MainNavigation.PaneHeader is null &&
@@ -182,7 +183,7 @@ public sealed partial class MainWindow
             await SmokeCapture.SaveAsync(root, output, $"input-dark-{suffix}.png");
         }
         MainNavigation.SelectedItem = HomeNavItem;
-        AppWindow.Resize(new SizeInt32(960, 650));
+        WindowSizing.ResizeInDips(this, 960, 650);
         await SmokeCapture.SaveAsync(root, output, "home-short.png");
         SmokeCapture.Require(HomePage.ScrollableHeight > 0, "Home page cannot scroll at short height.");
         HomePage.ChangeView(null, HomePage.ScrollableHeight, null, disableAnimation: true);
@@ -237,7 +238,7 @@ public sealed partial class MainWindow
         await CaptureConnectedDashboardAsync(root, output);
         await File.WriteAllTextAsync(Path.Combine(output, "shell-result.txt"),
             "PASS offline input navigation, local input without receiver, source isolation, wide/narrow/light/dark page rendering, OTA button busy/install/error/disconnect recovery, pending USB role ACK target preservation, ESP reset completion/error/deadline/reboot/generation isolation, ESP stop preserves feedback configuration, nullable audio state and role-aware audio selftest, module-specific tuning ranges, connected dashboard and shared device selection, footer actions without branding, live controller buttons/sticks/analog triggers/release/stale reset, XInput physical input fallback, duplicate snapshot expiry and USB timeout clearing");
-        AppWindow.Resize(new SizeInt32(1360, 940));
+        WindowSizing.ResizeInDips(this, 1360, 940);
         root.RequestedTheme = ElementTheme.Light;
         OpenCreateReceiver();
         var wizard = _setupWizardView!;
@@ -260,7 +261,7 @@ public sealed partial class MainWindow
 
     private async Task TestLiveControllerDiagramAsync(FrameworkElement root, string output)
     {
-        AppWindow.Resize(new SizeInt32(1360, 1000));
+        WindowSizing.ResizeInDips(this, 1360, 1000);
         MainNavigation.SelectedItem = InputNavItem;
         await Task.Delay(80);
         SmokeCapture.Require(InputPage.Visibility == Visibility.Visible &&
@@ -537,7 +538,7 @@ public sealed partial class MainWindow
                 (1360, 940, "wide"), (860, 900, "narrow"), (500, 900, "small")
             })
             {
-                AppWindow.Resize(new SizeInt32(width, height));
+                WindowSizing.ResizeInDips(this, width, height);
                 await Task.Delay(150);
                 foreach (var theme in new[] { ElementTheme.Light, ElementTheme.Dark })
                 {

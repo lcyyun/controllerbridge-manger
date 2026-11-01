@@ -10,7 +10,7 @@ public sealed partial class SetupWizardView
     internal async Task RunWizardSmokeAsync(string output)
     {
         SmokeCapture.Require(!_discoverDevices, "Wizard smoke must not discover hardware.");
-        _ownerWindow.AppWindow.Resize(new Windows.Graphics.SizeInt32(620, 900));
+        WindowSizing.ResizeInDips(_ownerWindow, 620, 900);
         await Task.Delay(80);
         SmokeCapture.Require(WizardProgress.Orientation == Orientation.Horizontal &&
             WizardContent.Padding.Left == 18,
@@ -54,7 +54,7 @@ public sealed partial class SetupWizardView
                 _wizardFirmware!.Module, _wizardFirmware.Firmware, null).Ready,
             "Wizard allowed flashing without a port.");
         await SmokeCapture.SaveAsync((FrameworkElement)Content, output, "firmware-flash.png");
-        _ownerWindow.AppWindow.Resize(new Windows.Graphics.SizeInt32(1360, 940));
+        WindowSizing.ResizeInDips(_ownerWindow, 1360, 940);
         await Task.Delay(80);
         SmokeCapture.Require(WizardContent.Padding.Left == 28,
             "Creation page did not restore its wide layout.");
@@ -100,7 +100,7 @@ public sealed partial class SetupWizardView
             "Creation errors did not use the single bottom notification bar.");
         await SmokeCapture.SaveAsync((FrameworkElement)_ownerWindow.Content, output, "creation-bottom-notification.png");
         status.IsOpen = false;
-        _ownerWindow.AppWindow.Resize(new Windows.Graphics.SizeInt32(500, 640));
+        WindowSizing.ResizeInDips(_ownerWindow, 500, 640);
         await Task.Delay(100);
         await SmokeCapture.SaveAsync((FrameworkElement)_ownerWindow.Content, output, "creation-board-small.png");
         SmokeCapture.Require(WizardScroller.ScrollableHeight > 0 && WizardFooter.ActualHeight > 0,

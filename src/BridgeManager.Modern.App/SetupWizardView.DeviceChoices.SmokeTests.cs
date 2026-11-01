@@ -22,7 +22,7 @@ public sealed partial class SetupWizardView
             WizardFirmwareList.SelectedItem is null && !WizardFlashButton.IsEnabled,
             "A fresh ESP32 family selection guessed a memory variant.");
         DetectedDeviceExpander.IsExpanded = false;
-        _ownerWindow.AppWindow.Resize(new Windows.Graphics.SizeInt32(1360, 940));
+        WindowSizing.ResizeInDips(_ownerWindow, 1360, 940);
         await Task.Delay(80);
         ShowWizardStep(2);
         await SmokeCapture.SaveAsync((FrameworkElement)_ownerWindow.Content, output, "esp32-device-selection.png");
@@ -57,7 +57,7 @@ public sealed partial class SetupWizardView
         SmokeCapture.Require(_wizardStep == 3 && _wizardBoard?.Id == saved.BoardId,
             "Back/forward navigation lost the concrete variant.");
         await SmokeCapture.SaveAsync((FrameworkElement)_ownerWindow.Content, output, "esp32-version-selection.png");
-        _ownerWindow.AppWindow.Resize(new Windows.Graphics.SizeInt32(620, 900));
+        WindowSizing.ResizeInDips(_ownerWindow, 620, 900);
         await Task.Delay(80);
         await SmokeCapture.SaveAsync((FrameworkElement)_ownerWindow.Content, output, "esp32-version-selection-compact.png");
         ShowWizardStep(2);

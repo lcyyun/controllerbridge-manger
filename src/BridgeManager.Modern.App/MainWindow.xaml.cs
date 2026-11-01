@@ -82,7 +82,7 @@ public sealed partial class MainWindow
             ExecuteModuleOperationAsync, ShowStatus);
         _dynamicPageRenderer.MappingWriteStateChanged += MappingWriteStateChanged;
         InitializeIndependentInput();
-        AppWindow.Resize(new SizeInt32(1260, 820));
+        WindowSizing.ResizeInDips(this, 1260, 820, fitWorkArea: true);
         _pollTimer.Interval = TimeSpan.FromMilliseconds(500);
         _pollTimer.Tick += PollTimer_Tick;
         Closed += MainWindow_Closed;

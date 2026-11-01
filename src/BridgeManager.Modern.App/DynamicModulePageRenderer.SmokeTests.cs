@@ -80,7 +80,7 @@ internal sealed partial class DynamicModulePageRenderer
         Grid.SetRow(scroll, 1);
         frame.Children.Add(scroll);
         window.Content = frame;
-        window.AppWindow.Resize(new SizeInt32(1120, 1000));
+        WindowSizing.ResizeInDips(window, 1120, 1000);
         await Task.Delay(250);
         await renderer.RenderAsync(psPage, host);
         Require(renderer._mappingLoaded, "PS mapping failed to load");
@@ -141,7 +141,7 @@ internal sealed partial class DynamicModulePageRenderer
         await renderer.RenderAsync(nsPage, host);
         Require(renderer._mappingSelectors["north"].SelectedValue?.ToString() == "west",
             "NS draft was lost");
-        window.AppWindow.Resize(new SizeInt32(500, 900));
+        WindowSizing.ResizeInDips(window, 500, 900);
         await CaptureAsync(frame, "ns-narrow.png");
         Require(renderer._mappingDiagram!.IsCompact &&
                 renderer._mappingDiagram.CalloutButtons.Values.All(button => button.ActualWidth > 100),
@@ -189,7 +189,7 @@ internal sealed partial class DynamicModulePageRenderer
             "Unsaved device state was presented as saved");
         deviceDirty = false;
         await renderer.RenderAsync(psPage, host);
-        window.AppWindow.Resize(new SizeInt32(1120, 1000));
+        WindowSizing.ResizeInDips(window, 1120, 1000);
         frame.RequestedTheme = ElementTheme.Dark;
         frame.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
             Windows.UI.Color.FromArgb(255, 26, 28, 33));
@@ -240,7 +240,7 @@ internal sealed partial class DynamicModulePageRenderer
                 "Pair write did not reach selected route");
             await CaptureAsync(frame, $"route-{definition.MappingProfile}-{definition.MappingOutput}.png");
         }
-        window.AppWindow.Resize(new SizeInt32(1920, 1080));
+        WindowSizing.ResizeInDips(window, 1920, 1080);
         renderer._expandAdvancedForSmoke = false;
         foreach (var inputProfile in new[] { "ds5", "ns2pro" })
         {
@@ -267,7 +267,7 @@ internal sealed partial class DynamicModulePageRenderer
             await CaptureAsync(frame, $"source-{inputProfile}-xbox.png");
         }
         await CaptureAsync(frame, "mapping-large.png");
-        window.AppWindow.Resize(new SizeInt32(860, 650));
+        WindowSizing.ResizeInDips(window, 860, 650);
         await CaptureAsync(frame, "mapping-short.png");
         Require(scroll.ScrollableHeight > 0, "Short viewport has no usable vertical scroll");
         scroll.ChangeView(null, scroll.ScrollableHeight, null, disableAnimation: true);

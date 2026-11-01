@@ -26,6 +26,16 @@ public partial class App : Application
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         var commandLine = Environment.GetCommandLineArgs();
+        var wheelSmoke = Array.IndexOf(commandLine, "--wheel-smoke");
+        if (wheelSmoke >= 0)
+        {
+            if (wheelSmoke + 1 >= commandLine.Length) { Environment.ExitCode = 2; Exit(); return; }
+            var window = new MainWindow(discoverDevices: false);
+            _window = window;
+            window.Activate();
+            window.PrepareWheelSmoke(commandLine[wheelSmoke + 1]);
+            return;
+        }
         var shellSmoke = Array.IndexOf(commandLine, "--shell-smoke");
         if (shellSmoke >= 0)
         {
@@ -81,7 +91,7 @@ public partial class App : Application
             TextWrapping = TextWrapping.Wrap });
         panel.Children.Add(close);
         _window = new Window { Title = "ControllerBridge Manager — 已在运行", Content = panel };
-        _window.AppWindow.Resize(new Windows.Graphics.SizeInt32(500, 260));
+        WindowSizing.ResizeInDips(_window, 500, 260, fitWorkArea: true);
         _window.Activate();
     }
 

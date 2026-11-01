@@ -6,6 +6,7 @@
     <WindowsSdkPackageVersion>10.0.19041.38</WindowsSdkPackageVersion>
     <RootNamespace>BridgeManager.Modern</RootNamespace>
     <AssemblyName>BridgeManager.Modern.App</AssemblyName>
+    <AssemblyName Condition="'$(UiSmokeHost)' == 'true'">ControllerBridge.UiSmoke</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\ControllerBridge.ico</ApplicationIcon>
     <UseWinUI>true</UseWinUI>
@@ -16,7 +17,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Platforms>x64</Platforms>
-    <Version>0.3.9-preview.1</Version>
+    <Version>0.3.10-preview.1</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260710003" />
