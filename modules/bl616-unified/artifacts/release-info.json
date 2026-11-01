@@ -1,13 +1,14 @@
 {
-  "moduleVersion": "0.2.3-preview.1",
-  "buildNumber": 1793444905,
+  "moduleVersion": "0.2.4-preview.1",
+  "buildNumber": 1793525196,
   "hardwareTested": false,
   "otaSigned": true,
   "usbPreviewIdentity": "FFFE:CB16",
-  "description": "NS2Pro wake reconnect recovery, source-frame deduplication and source battery telemetry.",
+  "description": "Standalone NS2 pairing persistence and uninterrupted saved-peer wake listening",
   "tests": [
-    "100 reconnect failure/retry cycles",
-    "runtime and NVDS",
-    "OTA service with real signature verification"
+    "physical pairing advertisement enters provisioning",
+    "saved NS2 target keeps BLE scanning",
+    "100 retry cycles and cancellation",
+    "maximum-size diagnostic JSON"
   ]
 }
