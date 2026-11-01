@@ -4,12 +4,12 @@
     {
       "moduleId": "bl616-unified",
       "repository": "lcyyun/controllerbridge-manger",
-      "tag": "v0.3.6-preview.1",
-      "asset": "bl616-unified-0.2.3-preview.1.cbmodule",
-      "sourceCommit": "6b3471761ea95f8200ab15c6b49239feb0206311",
-      "size": 1159957,
-      "sha256": "5010fe8e846bdf04374685a301b38ce46b0e4c83f4a02dcc11a914ba5ef636e9",
-      "moduleVersion": "0.2.3-preview.1",
+      "tag": "bl616-v0.2.4-preview.1",
+      "asset": "bl616-unified-0.2.4-preview.1.cbmodule",
+      "sourceCommit": "d872f4a8b821bf8a349a463d59f526499bc170c1",
+      "size": 1162343,
+      "sha256": "9dfe842da500350a803cecb22bbcab78660856ea485ec6e698c8ccf35dc91405",
+      "moduleVersion": "0.2.4-preview.1",
       "runtimeApiVersion": 2,
       "boards": [
         "bl616-devkit"
